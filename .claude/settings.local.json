@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfix: Remove redundant password change button and improve tab bar positioning\n\n- Removed ''Şifre Değiştir'' button from home screen (already available in Settings)\n- Adjusted bottom tab bar positioning for better readability on mobile:\n  - Reduced height from 70px to 65px\n  - Reduced paddingBottom from 12px to 8px\n  - Reduced paddingTop from 10px to 8px\n  - Adjusted icon and label margins for better spacing\n  - Tab labels now more visible and easier to read\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx expo start:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill /PID 61380 /F)",
+      "Bash(taskkill:*)",
+      "Bash(ping:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

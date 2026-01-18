@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "Diyetle",
+    "slug": "Diyetle",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "diyetle",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#4CAF50",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Diyetle"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tcodebilisim.diyetle",
+      "permissions": [
+        "CAMERA",
+        "PHOTO_LIBRARY"
+      ]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.tcodebilisim.diyetle",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#4CAF50"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Diyetle'nin fotoğraflara erişmesine izin ver",
+          "cameraPermission": "Diyetle'nin kameraya erişmesine izin ver"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7900e061-56da-44bc-a397-0695b2db0c3e"
+      }
+    },
+    "owner": "lordmem22"
+  }
+}
