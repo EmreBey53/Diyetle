@@ -14,7 +14,7 @@ import {
   query,
   where,
   Timestamp,
-  updateDoc,
+  updateDoc,r
 } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { storage, db } from '../firebaseConfig';
