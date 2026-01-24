@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getColors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
+import { auth } from '../firebaseConfig';
 import { getPatientProfileByUserId } from '../services/patientService';
 import { getProgressStats, ProgressStats } from '../services/progressService';
 import { getTodayWaterIntake, addWaterIntake, removeWaterIntake } from '../services/waterIntakeService';
@@ -93,7 +94,23 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
   };
 
   useEffect(() => {
-    loadData();
+    // Auth state listener ekle
+    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+      console.log('🔐 Auth state changed:', firebaseUser ? 'Logged in' : 'Logged out');
+      console.log('🔐 Firebase User:', firebaseUser?.uid, firebaseUser?.email);
+      
+      if (firebaseUser) {
+        // Kullanıcı giriş yapmış, data yükle
+        loadData();
+      } else {
+        // Kullanıcı çıkış yapmış
+        setUser(null);
+        setPatient(null);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -112,11 +129,16 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 PatientHomeScreenNew - loadData başlıyor');
+      
       const currentUser = await getCurrentUser();
+      console.log('👤 Current User:', currentUser);
       setUser(currentUser);
 
       if (currentUser) {
+        console.log('📋 Patient profili yükleniyor - User ID:', currentUser.id);
         const patientProfile = await getPatientProfileByUserId(currentUser.id);
+        console.log('📋 Patient Profile:', patientProfile);
         setPatient(patientProfile);
 
         if (patientProfile) {
@@ -433,7 +455,16 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
           <View style={styles.quickAccessRow}>
             <TouchableOpacity
               style={[styles.quickAccessCard, { backgroundColor: colors.cardBackground }]}
-              onPress={() => setMealPhotoModalVisible(true)}
+              onPress={() => {
+                console.log('📸 Öğün Fotoğrafı Gönder butonuna basıldı');
+                console.log('Patient ID:', patient?.id);
+                console.log('User ID:', user?.id);
+                console.log('Auth current user:', auth.currentUser?.uid);
+                
+                // Direkt PatientMealPhotoScreen'e git
+                console.log('✅ PatientMealPhoto ekranına gidiliyor');
+                navigation.navigate('PatientMealPhoto');
+              }}
             >
               <View style={[styles.quickAccessIconContainer, { backgroundColor: '#FF9800' + '15' }]}>
                 <Ionicons name="camera" size={26} color="#FF9800" />
@@ -700,12 +731,16 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
       )}
 
       {/* Meal Photo Upload Modal */}
-      {patient?.id && (
+      {(patient?.id || user?.id || auth.currentUser?.uid) && (
         <MealPhotoUploadModal
           visible={mealPhotoModalVisible}
-          onClose={() => setMealPhotoModalVisible(false)}
-          patientId={patient.id}
+          onClose={() => {
+            console.log('📸 Modal kapatılıyor');
+            setMealPhotoModalVisible(false);
+          }}
+          patientId={patient?.id || user?.id || auth.currentUser?.uid || 'temp-id'}
           onUploadSuccess={() => {
+            console.log('📸 Fotoğraf yükleme başarılı');
             // Optionally refresh data after upload
             loadLightData();
           }}

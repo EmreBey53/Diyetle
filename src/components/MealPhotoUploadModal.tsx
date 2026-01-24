@@ -47,6 +47,8 @@ export default function MealPhotoUploadModal({
   patientId,
   onUploadSuccess,
 }: MealPhotoUploadModalProps) {
+  console.log('📸 MealPhotoUploadModal render - visible:', visible, 'patientId:', patientId);
+  
   const { isDark } = useTheme();
   const colors = getColors(isDark);
 
@@ -79,12 +81,17 @@ export default function MealPhotoUploadModal({
 
   const handleTakePhoto = async () => {
     try {
+      console.log('📸 Kamera butonu basıldı');
+      
       const hasPermission = await requestCameraPermission();
+      console.log('📸 Kamera izni:', hasPermission);
+      
       if (!hasPermission) {
         Alert.alert('İzin Gerekli', 'Kamera kullanmak için izin vermeniz gerekmektedir.');
         return;
       }
 
+      console.log('📸 ImagePicker.launchCameraAsync çağrılıyor...');
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -93,23 +100,33 @@ export default function MealPhotoUploadModal({
         base64: true,
       });
 
+      console.log('📸 ImagePicker sonucu:', result);
+
       if (!result.canceled && result.assets[0]) {
+        console.log('📸 Fotoğraf seçildi, işleniyor...');
         await processPhoto(result.assets[0].uri, result.assets[0].base64 || '');
+      } else {
+        console.log('📸 Fotoğraf seçimi iptal edildi');
       }
-    } catch (error) {
-      console.error('Kamera hatası:', error);
-      Alert.alert('Hata', 'Fotoğraf çekerken hata oluştu');
+    } catch (error: any) {
+      console.error('❌ Kamera hatası:', error);
+      Alert.alert('Hata', 'Fotoğraf çekerken hata oluştu: ' + (error?.message || 'Bilinmeyen hata'));
     }
   };
 
   const handlePickPhoto = async () => {
     try {
+      console.log('🖼️ Galeri butonu basıldı');
+      
       const hasPermission = await requestGalleryPermission();
+      console.log('🖼️ Galeri izni:', hasPermission);
+      
       if (!hasPermission) {
         Alert.alert('İzin Gerekli', 'Galeriye erişmek için izin vermeniz gerekmektedir.');
         return;
       }
 
+      console.log('🖼️ ImagePicker.launchImageLibraryAsync çağrılıyor...');
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -118,12 +135,17 @@ export default function MealPhotoUploadModal({
         base64: true,
       });
 
+      console.log('🖼️ ImagePicker sonucu:', result);
+
       if (!result.canceled && result.assets[0]) {
+        console.log('🖼️ Fotoğraf seçildi, işleniyor...');
         await processPhoto(result.assets[0].uri, result.assets[0].base64 || '');
+      } else {
+        console.log('🖼️ Fotoğraf seçimi iptal edildi');
       }
-    } catch (error) {
-      console.error('Galeri hatası:', error);
-      Alert.alert('Hata', 'Galeri açılırken hata oluştu');
+    } catch (error: any) {
+      console.error('❌ Galeri hatası:', error);
+      Alert.alert('Hata', 'Galeri açılırken hata oluştu: ' + (error?.message || 'Bilinmeyen hata'));
     }
   };
 

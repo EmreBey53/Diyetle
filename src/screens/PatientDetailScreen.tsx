@@ -23,6 +23,8 @@ import { Progress, getBMICategoryColor, getBMICategory } from '../models/Progres
 import { DietPlan, formatExpiryInfo, getStatusColor, getStatusEmoji, getDayName } from '../models/DietPlan';
 import { getColors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
+import { getCurrentUser } from '../services/authService';
+import { createChatRoom } from '../services/chatService';
 import { generateAnamnesisFormPDF } from '../services/pdfService';
 import {
   GOAL_OPTIONS,
@@ -248,7 +250,13 @@ export default function PatientDetailScreen({ route, navigation }: any) {
       const date = typeof item.recordDate === 'string' ? new Date(item.recordDate) : item.recordDate;
       return `${date.getDate()}/${date.getMonth() + 1}`;
     });
-    const weights = recentProgress.map((item) => item.weight);
+    // NaN ve Infinity değerlerini filtrele
+    const weights = recentProgress.map((item) => {
+      const w = item.weight;
+      return (typeof w === 'number' && isFinite(w) && !isNaN(w)) ? w : 0;
+    });
+    // En az bir geçerli veri yoksa null döndür
+    if (weights.length === 0 || labels.length === 0) return null;
     return {
       labels,
       datasets: [{ data: weights, color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`, strokeWidth: 3 }],
@@ -544,6 +552,60 @@ export default function PatientDetailScreen({ route, navigation }: any) {
             >
               <Text style={styles.actionButtonText}>⚙️ Hatırlatıcı Ayarları</Text>
             </TouchableOpacity>
+
+            {/* Video Görüşme Butonu */}
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: '#2196F3', borderColor: '#2196F3' }]} 
+              onPress={() => navigation.navigate('VideoCall', {
+                appointmentId: `direct-call-${patient.id}-${Date.now()}`,
+                participantName: patient.name,
+                patientId: patient.id
+              })}
+            >
+              <Text style={[styles.actionButtonText, { color: colors.white }]}>📹 Video Görüşme Başlat</Text>
+            </TouchableOpacity>
+
+            {/* Randevu Oluştur Butonu */}
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: '#9C27B0', borderColor: '#9C27B0' }]} 
+              onPress={() => navigation.navigate('CreateAppointment', {
+                patientId: patient.id,
+                patientName: patient.name
+              })}
+            >
+              <Text style={[styles.actionButtonText, { color: colors.white }]}>📅 Randevu Oluştur</Text>
+            </TouchableOpacity>
+
+            {/* Chat Butonu */}
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#4CAF50', borderColor: '#4CAF50' }]}
+              onPress={async () => {
+                try {
+                  if (!patient.id) {
+                    Alert.alert('Hata', 'Hasta bilgisi bulunamadı');
+                    return;
+                  }
+                  const user = await getCurrentUser();
+                  if (user) {
+                    const chatRoomId = await createChatRoom(
+                      patient.id,
+                      user.id,
+                      patient.name,
+                      user.displayName || 'Diyetisyen'
+                    );
+                    navigation.navigate('Chat', {
+                      chatRoomId,
+                      otherUserName: patient.name,
+                      otherUserId: patient.id
+                    });
+                  }
+                } catch (error) {
+                  Alert.alert('Hata', 'Chat başlatılamadı');
+                }
+              }}
+            >
+              <Text style={[styles.actionButtonText, { color: colors.white }]}>💬 Mesajlaşma</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={{ height: 100 }} />
@@ -603,7 +665,7 @@ export default function PatientDetailScreen({ route, navigation }: any) {
                 )}
 
                 {/* Grafik */}
-                {progressList.length > 1 && getChartData() && (
+                {progressList.length > 1 && getChartData() && getChartData()!.datasets[0].data.some(v => v > 0) && (
                   <View style={styles.chartContainer}>
                     <Text style={styles.chartTitle}>📈 Kilo Değişimi</Text>
                     <LineChart
@@ -620,6 +682,7 @@ export default function PatientDetailScreen({ route, navigation }: any) {
                         propsForDots: { r: '6', strokeWidth: '2', stroke: colors.primary },
                       }}
                       bezier
+                      fromZero={true}
                       style={styles.chart}
                     />
                   </View>

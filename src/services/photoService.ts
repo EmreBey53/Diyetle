@@ -20,6 +20,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { storage, db } from '../firebaseConfig';
 import { MealPhoto, FoodDetectionResult } from '../models/MealPhoto';
 import { notifyDietitianMealPhoto, notifyPatientPhotoResponse } from './notificationService';
+import { ENV } from '../config/env';
+import { checkNetworkStatus, retryWithBackoff } from '../utils/networkUtils';
 
 const PHOTOS_COLLECTION = 'mealPhotos';
 const STORAGE_PATH = 'meal-photos';
@@ -27,64 +29,100 @@ const STORAGE_PATH = 'meal-photos';
 // PERMISSION FUNCTIONS
 export const requestCameraPermission = async (): Promise<boolean> => {
   try {
+    console.log('🔐 Kamera izni isteniyor...');
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    console.log('🔐 Kamera izin durumu:', status);
     return status === 'granted';
   } catch (error) {
-    console.error('Camera permission hatası:', error);
+    console.error('❌ Camera permission hatası:', error);
     return false;
   }
 };
 
 export const requestGalleryPermission = async (): Promise<boolean> => {
   try {
+    console.log('🔐 Galeri izni isteniyor...');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log('🔐 Galeri izin durumu:', status);
     return status === 'granted';
   } catch (error) {
-    console.error('Gallery permission hatası:', error);
+    console.error('❌ Gallery permission hatası:', error);
     return false;
   }
 };
 
-// GOOGLE VISION API
+// GOOGLE VISION API - SECURE VERSION WITH NETWORK HANDLING
 export const analyzeFoodImage = async (
   base64Image: string
 ): Promise<FoodDetectionResult> => {
   try {
     console.log('🔍 Resim Google Vision API ile analiz ediliyor...');
 
-    const apiKey = 'AIzaSyC8mLx_LQdMJrOzLtDyJLrqzIW-fT69rJo';
-
-    const response = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    // Network durumunu kontrol et
+    const networkState = await checkNetworkStatus();
+    if (!networkState.isConnected) {
+      console.warn('⚠️ Network bağlantısı yok, offline fallback kullanılıyor');
+      return {
+        success: false,
+        message: 'İnternet bağlantısı yok. Fotoğraf yine de gönderilebilir.',
+        error: 'No network connection',
+        data: {
+          isFood: true, // Offline fallback
+          confidence: 50,
+          labels: ['offline'],
+          foodItems: ['yemek'],
         },
-        body: JSON.stringify({
-          requests: [
-            {
-              image: {
-                content: base64Image,
-              },
-              features: [
-                {
-                  type: 'LABEL_DETECTION',
-                  maxResults: 10,
-                },
-              ],
-            },
-          ],
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Vision API hatası');
+      };
     }
 
-    const data = await response.json();
-    const labels = data.responses[0]?.labelAnnotations || [];
+    // API key'i environment'dan al
+    const apiKey = ENV.GOOGLE_VISION_API_KEY;
+
+    // Retry mekanizması ile API çağrısı
+    const result = await retryWithBackoff(async () => {
+      console.log('🔄 Vision API çağrısı yapılıyor...');
+
+      const response = await fetch(
+        `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            requests: [
+              {
+                image: {
+                  content: base64Image,
+                },
+                features: [
+                  {
+                    type: 'LABEL_DETECTION',
+                    maxResults: 10,
+                  },
+                ],
+              },
+            ],
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Vision API HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      // API error kontrolü
+      if (data.responses?.[0]?.error) {
+        throw new Error(`Vision API Error: ${data.responses[0].error.message}`);
+      }
+
+      return data;
+    }, 3, 1000);
+
+    const labels = result.responses[0]?.labelAnnotations || [];
 
     console.log('📋 Detected Labels:', labels.map((l: any) => l.description));
 
@@ -150,17 +188,32 @@ export const analyzeFoodImage = async (
         foodItems: foodLabels,
       },
     };
+
   } catch (error: any) {
     console.error('❌ Vision API hatası:', error);
+    
+    // Network hatası mı kontrol et
+    const isNetworkError = error.message?.includes('network') || 
+                          error.message?.includes('fetch') ||
+                          error.message?.includes('connection');
+    
     return {
       success: false,
-      message: 'Resim analiz edilirken hata oluştu. Lütfen tekrar deneyin.',
+      message: isNetworkError 
+        ? 'İnternet bağlantısı sorunu. Fotoğraf yine de gönderilebilir.'
+        : 'Resim analiz edilirken hata oluştu. Lütfen tekrar deneyin.',
       error: error.message,
+      data: {
+        isFood: true, // Fallback
+        confidence: 50,
+        labels: ['error'],
+        foodItems: ['yemek'],
+      },
     };
   }
 };
 
-// UPLOAD PHOTO - DEBUG VERSION
+// UPLOAD PHOTO - OPTIMIZED VERSION WITH FIREBASE STORAGE AND ERROR HANDLING
 export const uploadMealPhoto = async (
   patientId: string,
   uri: string,
@@ -172,18 +225,58 @@ export const uploadMealPhoto = async (
   message?: string
 ): Promise<string> => {
   try {
-    console.log('📤 Fotoğraf Firestore\'a kaydediliyor...');
+    console.log('📤 Fotoğraf Firebase Storage\'a yükleniyor...');
+
+    // Network durumunu kontrol et
+    const networkState = await checkNetworkStatus();
+    if (!networkState.isConnected) {
+      throw new Error('İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.');
+    }
 
     const timestamp = Date.now();
+    const fileName = `${patientId}_${mealType}_${timestamp}.jpg`;
+    const storagePath = `${STORAGE_PATH}/${patientId}/${fileName}`;
 
-    // Firestore'a metadata + base64 kaydet
+    let photoUrl = '';
+    let finalStoragePath = '';
+
+    // Firebase Storage'a yükleme işlemini retry ile yap
+    try {
+      await retryWithBackoff(async () => {
+        console.log('⬆️ Storage\'a yükleniyor...');
+        const response = await fetch(uri);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const storageRef = ref(storage, storagePath);
+        
+        await uploadBytes(storageRef, blob);
+        
+        console.log('🔗 Download URL alınıyor...');
+        photoUrl = await getDownloadURL(storageRef);
+        finalStoragePath = storagePath;
+        
+        console.log('✅ Firebase Storage yükleme başarılı');
+      }, 3, 2000);
+      
+    } catch (storageError: any) {
+      console.warn('⚠️ Firebase Storage hatası, base64 ile devam ediliyor:', storageError.message);
+      // Storage başarısız olursa base64 kullan (fallback)
+      photoUrl = `data:image/jpeg;base64,${base64Image}`;
+      finalStoragePath = '';
+    }
+
+    // Firestore'a metadata kaydet
     const photoData = {
       patientId,
       mealType,
       mealName,
-      photoBase64: base64Image, // ← Base64'i direkt kaydet
-      photoUrl: '', // Boş bırak şimdilik
-      storagePath: '',
+      photoUrl,
+      storagePath: finalStoragePath,
+      // Base64'ü sadece Storage başarısız olursa kaydet
+      ...(finalStoragePath === '' && { photoBase64: base64Image }),
       detectedLabels,
       confidence,
       isVerified: true,

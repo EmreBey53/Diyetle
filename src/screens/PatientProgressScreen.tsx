@@ -91,7 +91,14 @@ export default function PatientProgressScreen({ navigation }: any) {
       return `${date.getDate()}/${date.getMonth() + 1}`;
     });
 
-    const weights = recentProgress.map((item) => item.weight);
+    // NaN ve Infinity değerlerini filtrele
+    const weights = recentProgress.map((item) => {
+      const w = item.weight;
+      return (typeof w === 'number' && isFinite(w) && !isNaN(w)) ? w : 0;
+    });
+
+    // En az bir geçerli veri yoksa null döndür
+    if (weights.length === 0 || labels.length === 0) return null;
 
     return {
       labels,
@@ -250,7 +257,7 @@ export default function PatientProgressScreen({ navigation }: any) {
       )}
 
       {/* Grafik */}
-      {progressList.length > 1 && getChartData() && (
+      {progressList.length > 1 && getChartData() && getChartData()!.datasets[0].data.some(v => v > 0) && (
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>📈 Kilo Değişimi</Text>
           <LineChart
@@ -274,6 +281,7 @@ export default function PatientProgressScreen({ navigation }: any) {
               },
             }}
             bezier
+            fromZero={true}
             style={styles.chart}
           />
         </View>

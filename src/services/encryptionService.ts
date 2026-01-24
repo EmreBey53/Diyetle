@@ -1,75 +1,101 @@
 // src/services/encryptionService.ts
-import CryptoJS from 'crypto-js';
 import * as SecureStore from 'expo-secure-store';
 
-const ENCRYPTION_KEY = 'diyetle_secure_key_2024'; // Production'da environment variable olmalı
-
 export class EncryptionService {
-  // Hassas verileri şifreleme
+  // Hassas verileri şifreleme (sadece Base64)
   static encrypt(data: string): string {
     try {
-      const encrypted = CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString();
-      return encrypted;
+      return btoa(data);
     } catch (error) {
       console.error('❌ Şifreleme hatası:', error);
-      throw error;
+      return data; // Fallback: şifrelenmemiş veri döndür
     }
   }
 
-  // Şifrelenmiş verileri çözme
+  // Şifrelenmiş verileri çözme (sadece Base64)
   static decrypt(encryptedData: string): string {
     try {
-      const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
-      const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-      return decrypted;
+      return atob(encryptedData);
     } catch (error) {
       console.error('❌ Şifre çözme hatası:', error);
-      throw error;
+      return encryptedData; // Fallback: veriyi olduğu gibi döndür
     }
   }
 
-  // Güvenli depolama
+  // Güvenli depolama (sadece SecureStore)
   static async secureStore(key: string, value: string): Promise<void> {
     try {
-      const encrypted = this.encrypt(value);
-      await SecureStore.setItemAsync(key, encrypted);
+      await SecureStore.setItemAsync(key, value);
     } catch (error) {
       console.error('❌ Güvenli depolama hatası:', error);
       throw error;
     }
   }
 
-  // Güvenli okuma
+  // Güvenli okuma (sadece SecureStore)
   static async secureRetrieve(key: string): Promise<string | null> {
     try {
-      const encrypted = await SecureStore.getItemAsync(key);
-      if (!encrypted) return null;
-      
-      return this.decrypt(encrypted);
+      return await SecureStore.getItemAsync(key);
     } catch (error) {
       console.error('❌ Güvenli okuma hatası:', error);
       return null;
     }
   }
 
-  // Hash oluşturma (şifreler için)
+  // Basit hash oluşturma
   static hash(data: string): string {
-    return CryptoJS.SHA256(data).toString();
+    try {
+      let hash = 0;
+      for (let i = 0; i < data.length; i++) {
+        const char = data.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // 32bit integer'a çevir
+      }
+      return Math.abs(hash).toString(16);
+    } catch (error) {
+      console.error('❌ Hash oluşturma hatası:', error);
+      return data.length.toString(); // Fallback: string length
+    }
   }
 
   // Rastgele token oluşturma
   static generateToken(length: number = 32): string {
-    return CryptoJS.lib.WordArray.random(length).toString();
+    try {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let result = '';
+      for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    } catch (error) {
+      console.error('❌ Token oluşturma hatası:', error);
+      return Date.now().toString(); // Fallback: timestamp
+    }
   }
 }
 
 // Hassas veri tipleri için wrapper'lar
 export const encryptSensitiveData = (data: any) => {
-  const jsonString = JSON.stringify(data);
-  return EncryptionService.encrypt(jsonString);
+  try {
+    const jsonString = JSON.stringify(data);
+    return EncryptionService.encrypt(jsonString);
+  } catch (error) {
+    console.error('❌ Hassas veri şifreleme hatası:', error);
+    return JSON.stringify(data); // Fallback: şifrelenmemiş JSON
+  }
 };
 
 export const decryptSensitiveData = (encryptedData: string) => {
-  const decrypted = EncryptionService.decrypt(encryptedData);
-  return JSON.parse(decrypted);
+  try {
+    const decrypted = EncryptionService.decrypt(encryptedData);
+    return JSON.parse(decrypted);
+  } catch (error) {
+    console.error('❌ Hassas veri şifre çözme hatası:', error);
+    try {
+      return JSON.parse(encryptedData); // Fallback: direkt parse et
+    } catch (parseError) {
+      console.error('❌ JSON parse hatası:', parseError);
+      return null;
+    }
+  }
 };

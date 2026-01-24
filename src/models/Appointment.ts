@@ -21,6 +21,7 @@ export interface AppointmentFormData {
   time: string;
   meetingLink: string;
   notes?: string;
+  meetingType?: 'link' | 'app';
 }
 
 export interface NotificationPayload {

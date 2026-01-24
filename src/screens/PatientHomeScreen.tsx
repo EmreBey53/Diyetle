@@ -190,7 +190,12 @@ export default function PatientHomeScreen({ navigation }: any) {
       const date = typeof item.recordDate === 'string' ? new Date(item.recordDate) : item.recordDate;
       return `${date.getDate()}/${date.getMonth() + 1}`;
     });
-    const weights = recentProgress.map((item) => item.weight);
+    // NaN ve Infinity değerlerini filtrele
+    const weights = recentProgress.map((item) => {
+      const w = item.weight;
+      return (typeof w === 'number' && isFinite(w) && !isNaN(w)) ? w : 0;
+    });
+    if (weights.length === 0 || labels.length === 0) return null;
     return {
       labels,
       datasets: [{ data: weights, color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`, strokeWidth: 3 }],
@@ -204,7 +209,12 @@ export default function PatientHomeScreen({ navigation }: any) {
       const date = typeof item.recordDate === 'string' ? new Date(item.recordDate) : item.recordDate;
       return `${date.getDate()}/${date.getMonth() + 1}`;
     });
-    const bmis = recentProgress.map((item) => item.bmi);
+    // NaN ve Infinity değerlerini filtrele
+    const bmis = recentProgress.map((item) => {
+      const b = item.bmi;
+      return (typeof b === 'number' && isFinite(b) && !isNaN(b)) ? b : 0;
+    });
+    if (bmis.length === 0 || labels.length === 0) return null;
     return {
       labels,
       datasets: [{ data: bmis, color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`, strokeWidth: 3 }],
@@ -286,7 +296,7 @@ export default function PatientHomeScreen({ navigation }: any) {
         )}
 
         {/* Kilo Grafiği */}
-        {chartData && progressList.length > 1 && (
+        {chartData && progressList.length > 1 && chartData.datasets[0].data.some(v => v > 0) && (
           <View style={styles.chartSection}>
             <Text style={styles.chartTitle}>⚖️ Kilo Değişimi (Son 7 Gün)</Text>
             <LineChart
@@ -303,13 +313,14 @@ export default function PatientHomeScreen({ navigation }: any) {
                 propsForDots: { r: '6', strokeWidth: '2', stroke: colors.primary },
               }}
               bezier
+              fromZero={true}
               style={styles.chart}
             />
           </View>
         )}
 
         {/* BMI Grafiği */}
-        {bmiChartData && progressList.length > 1 && (
+        {bmiChartData && progressList.length > 1 && bmiChartData.datasets[0].data.some(v => v > 0) && (
           <View style={styles.chartSection}>
             <Text style={styles.chartTitle}>📊 BMI Trendi (Son 7 Gün)</Text>
             <LineChart
@@ -326,6 +337,7 @@ export default function PatientHomeScreen({ navigation }: any) {
                 propsForDots: { r: '6', strokeWidth: '2', stroke: '#2196F3' },
               }}
               bezier
+              fromZero={true}
               style={styles.chart}
             />
           </View>
@@ -431,6 +443,7 @@ export default function PatientHomeScreen({ navigation }: any) {
             >
               <Text style={styles.menuButtonText}>🔐 Şifre Değiştir</Text>
             </TouchableOpacity>
+
           </View>
         </View>
 

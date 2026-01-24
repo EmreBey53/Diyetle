@@ -87,13 +87,13 @@ export default function RegisterScreen({ navigation }: any) {
 
       console.log('✅ Kullanıcı başarıyla oluşturuldu:', user);
 
-      // EĞER PATIENT İSE: Questionnaire ekranına yönlendir
+      // EĞER PATIENT İSE: Önce KVKK onay ekranına yönlendir
       if (role === 'patient') {
-        Alert.alert('Başarılı!', 'Hesabınız oluşturuldu. Anket ekranına yönlendiriliyorsunuz.', [
+        Alert.alert('Başarılı!', 'Hesabınız oluşturuldu. KVKK onay ekranına yönlendiriliyorsunuz.', [
           {
             text: 'Tamam',
             onPress: () => {
-              navigation.replace('Questionnaire', {
+              navigation.replace('KVKKConsent', {
                 user: user,
                 selectedDietitianId: selectedDietitian,
               });

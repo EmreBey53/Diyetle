@@ -174,6 +174,12 @@ export const createGroupChallenge = async (challenge: Omit<Challenge, 'id' | 'pa
 // Challenge'a katılma
 export const joinChallenge = async (challengeId: string, userId: string) => {
   try {
+    // Parametreleri kontrol et
+    if (!challengeId || !userId) {
+      console.warn('⚠️ joinChallenge: challengeId veya userId eksik');
+      return;
+    }
+
     const challengeRef = doc(db, 'challenges', challengeId);
     
     // Mevcut katılımcıları al ve yeni kullanıcıyı ekle

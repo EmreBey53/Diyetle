@@ -167,14 +167,19 @@ export const processWearableData = async (userId: string, wearableData: any) => 
   try {
     // Akıllı saat verilerini normalize et
     const normalizedData = normalizeWearableData(wearableData);
-    
+
     for (const data of normalizedData) {
-      await saveHealthData({
-        userId,
-        ...data,
-        source: 'smartwatch',
-        timestamp: Timestamp.now(),
-      });
+      // dataType, value ve unit kontrolü
+      if (data.dataType && data.value !== undefined && data.unit) {
+        await saveHealthData({
+          userId,
+          dataType: data.dataType,
+          value: data.value,
+          unit: data.unit,
+          source: 'smartwatch',
+          timestamp: Timestamp.now(),
+        });
+      }
     }
 
     console.log('⌚ Akıllı saat verileri işlendi');

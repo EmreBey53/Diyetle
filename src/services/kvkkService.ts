@@ -1,6 +1,6 @@
 // src/services/kvkkService.ts
 import { db } from '../firebaseConfig';
-import { doc, setDoc, getDoc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, deleteDoc, Timestamp, collection, getDocs } from 'firebase/firestore';
 import { logAuditEvent, AUDIT_ACTIONS } from './auditService';
 
 export interface KVKKConsent {
@@ -123,10 +123,60 @@ export const requestDataRectification = async (userId: string, corrections: any)
       details: corrections,
       severity: 'medium',
     });
-    
+
     console.log('✅ Veri düzeltme talebi kaydedildi');
   } catch (error) {
     console.error('❌ Veri düzeltme talebi hatası:', error);
+    throw error;
+  }
+};
+
+// Mevcut tüm kullanıcılar için KVKK onayı oluştur (migration)
+export const migrateExistingUsersKVKK = async (): Promise<{ success: number; skipped: number; failed: number }> => {
+  const results = { success: 0, skipped: 0, failed: 0 };
+
+  try {
+    // Tüm kullanıcıları getir
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userId = userDoc.id;
+
+      try {
+        // Zaten KVKK onayı var mı kontrol et
+        const existingConsent = await getKVKKConsent(userId);
+
+        if (existingConsent) {
+          console.log(`⏭️ Kullanıcı ${userId} zaten KVKK onayı vermiş, atlanıyor...`);
+          results.skipped++;
+          continue;
+        }
+
+        // Yeni KVKK onayı oluştur
+        const consent: KVKKConsent = {
+          userId,
+          dataProcessingConsent: true,
+          marketingConsent: true,
+          thirdPartyConsent: false,
+          consentDate: Timestamp.now(),
+          consentVersion: '1.0',
+        };
+
+        // Direkt kaydet (audit log olmadan - migration için)
+        await setDoc(doc(db, 'kvkk_consents', userId), consent);
+
+        console.log(`✅ Kullanıcı ${userId} için KVKK onayı oluşturuldu`);
+        results.success++;
+      } catch (userError) {
+        console.error(`❌ Kullanıcı ${userId} için KVKK hatası:`, userError);
+        results.failed++;
+      }
+    }
+
+    console.log(`📊 KVKK Migration tamamlandı: ${results.success} başarılı, ${results.skipped} atlandı, ${results.failed} başarısız`);
+    return results;
+  } catch (error) {
+    console.error('❌ KVKK migration hatası:', error);
     throw error;
   }
 };

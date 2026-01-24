@@ -12,8 +12,19 @@ export interface DashboardStats {
   patients: Patient[];
 }
 
+// Cache mekanizması
+let cachedStats: { [dietitianId: string]: { data: DashboardStats; timestamp: number } } = {};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
+
 export const getDashboardStats = async (dietitianId: string): Promise<DashboardStats> => {
   try {
+    // Cache kontrolü
+    const cached = cachedStats[dietitianId];
+    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      console.log('📊 Cache\'den istatistikler yüklendi');
+      return cached.data;
+    }
+
     console.log('📊 Dashboard istatistikleri yükleniyor...');
     
     const patients = await getPatientsByDietitian(dietitianId);
@@ -38,20 +49,28 @@ export const getDashboardStats = async (dietitianId: string): Promise<DashboardS
       return createdDate >= oneWeekAgo;
     }).length;
     
-    console.log('✅ İstatistikler hazır:', {
-      totalPatients,
-      averageBMI: averageBMI.toFixed(1),
-      highBMICount,
-      recentPatientsCount
-    });
-    
-    return {
+    const stats: DashboardStats = {
       totalPatients,
       averageBMI: parseFloat(averageBMI.toFixed(1)),
       highBMICount,
       recentPatientsCount,
       patients,
     };
+
+    // Cache'e kaydet
+    cachedStats[dietitianId] = {
+      data: stats,
+      timestamp: Date.now()
+    };
+
+    console.log('✅ İstatistikler hazır:', {
+      totalPatients,
+      averageBMI: averageBMI.toFixed(1),
+      highBMICount,
+      recentPatientsCount
+    });
+
+    return stats;
   } catch (error: any) {
     console.error('❌ Dashboard yükleme hatası:', error);
     throw new Error(error.message);

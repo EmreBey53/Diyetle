@@ -34,7 +34,13 @@ import QuestionnaireScreen from '../screens/QuestionnaireScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import HelpSupportScreen from '../screens/HelpSupportScreen';
 import ChatScreen from '../screens/ChatScreen';
+import ChatSelectionScreen from '../screens/ChatSelectionScreen';
 import SecuritySettingsScreen from '../screens/SecuritySettingsScreen';
+import VideoCallScreen from '../screens/VideoCallScreen';
+import VideoCallSelectionScreen from '../screens/VideoCallSelectionScreen';
+import AppointmentCalendarScreen from '../screens/AppointmentCalendarScreen';
+import TestMenuScreen from '../screens/TestMenuScreen';
+import KVKKConsentScreen from '../screens/KVKKConsentScreen';
 
 // YENI: Randevu Ekranları
 import CreateAppointmentScreen from '../screens/CreateAppointmentScreen';
@@ -194,11 +200,35 @@ export default function AppNavigator() {
   options={{ headerShown: false }}
 />
 <Stack.Screen
+  name="ChatSelection"
+  component={ChatSelectionScreen}
+  options={{ headerShown: false }}
+/>
+<Stack.Screen
   name="SecuritySettings"
   component={SecuritySettingsScreen}
   options={{ headerShown: false }}
 />
-
+<Stack.Screen
+  name="VideoCall"
+  component={VideoCallScreen}
+  options={{ headerShown: false }}
+/>
+<Stack.Screen
+  name="VideoCallSelection"
+  component={VideoCallSelectionScreen}
+  options={{ headerShown: false }}
+/>
+<Stack.Screen
+  name="AppointmentCalendar"
+  component={AppointmentCalendarScreen}
+  options={{ headerShown: false }}
+/>
+<Stack.Screen
+  name="TestMenu"
+  component={TestMenuScreen}
+  options={{ headerShown: false }}
+/>
 {/* YENI: Randevu Routes */}
 <Stack.Screen
   name="CreateAppointment"
@@ -263,6 +293,14 @@ export default function AppNavigator() {
   name="PatientRemindersSettings"
   component={PatientRemindersSettingsScreen}
   options={{ headerTitle: '' }}
+/>
+<Stack.Screen
+  name="KVKKConsent"
+  component={KVKKConsentScreen}
+  options={{
+    headerShown: false,
+    gestureEnabled: false, // Geri tuşu devre dışı
+  }}
 />
 <Stack.Screen
   name="Questionnaire"

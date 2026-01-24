@@ -294,6 +294,13 @@ export default function DietitianSettingsScreen({ navigation }: any) {
             />
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <SettingItem
+              icon="shield-checkmark-outline"
+              title="Güvenlik & KVKK"
+              subtitle="Güvenlik ayarları, KVKK rızaları"
+              onPress={() => navigation.navigate('SecuritySettings')}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <SettingItem
               icon="help-circle-outline"
               title="Yardım & Destek"
               subtitle="SSS ve iletişim"

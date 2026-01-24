@@ -1,5 +1,5 @@
 // src/services/patientService.ts
-import { db, auth } from '../firebaseConfig';
+import { db } from '../firebaseConfig';
 import {
   collection,
   addDoc,
@@ -14,6 +14,68 @@ import {
 import { Patient, calculateBMI } from '../models/Patient';
 
 const PATIENTS_COLLECTION = 'patients';
+
+// Users collection'daki patient'ları patients collection'a senkronize et
+export const syncPatientsFromUsers = async (dietitianId: string): Promise<number> => {
+  try {
+    console.log('🔄 Patient senkronizasyonu başlıyor, diyetisyen:', dietitianId);
+
+    // 1. Users collection'dan bu diyetisyene bağlı patient'ları al
+    const usersQuery = query(
+      collection(db, 'users'),
+      where('role', '==', 'patient'),
+      where('dietitianId', '==', dietitianId)
+    );
+    const usersSnapshot = await getDocs(usersQuery);
+    console.log('📊 Users collection\'da bulunan patient sayısı:', usersSnapshot.size);
+
+    // 2. Patients collection'dan mevcut patient'ları al (userId bazında)
+    const patientsQuery = query(
+      collection(db, PATIENTS_COLLECTION),
+      where('dietitianId', '==', dietitianId)
+    );
+    const patientsSnapshot = await getDocs(patientsQuery);
+    const existingUserIds = new Set(
+      patientsSnapshot.docs.map(doc => doc.data().userId).filter(Boolean)
+    );
+    console.log('📊 Patients collection\'da mevcut:', existingUserIds.size);
+
+    // 3. Eksik olanları ekle
+    let addedCount = 0;
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const userId = userDoc.id;
+
+      if (!existingUserIds.has(userId)) {
+        // Bu user patients collection'da yok, ekle
+        const patientData: any = {
+          userId: userId,
+          dietitianId: dietitianId,
+          name: userData.displayName || userData.name || 'İsimsiz',
+          email: userData.email || '',
+          phone: userData.phone || '',
+          createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(),
+          updatedAt: new Date(),
+        };
+
+        // Sadece tanımlı değerleri ekle (Firebase undefined kabul etmez)
+        if (userData.weight) patientData.weight = userData.weight;
+        if (userData.height) patientData.height = userData.height;
+        if (userData.bmi) patientData.bmi = userData.bmi;
+
+        await addDoc(collection(db, PATIENTS_COLLECTION), patientData);
+        addedCount++;
+        console.log('✅ Patient eklendi:', patientData.name);
+      }
+    }
+
+    console.log(`🔄 Senkronizasyon tamamlandı. ${addedCount} yeni patient eklendi.`);
+    return addedCount;
+  } catch (error: any) {
+    console.error('❌ Senkronizasyon hatası:', error);
+    return 0;
+  }
+};
 
 // Diyetisyenin danışanlarını getir
 export const getPatientsByDietitian = async (dietitianId: string): Promise<Patient[]> => {

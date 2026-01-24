@@ -1,0 +1,29 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Images uploaded by authenticated users
+    match /images/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Profile pictures
+    match /profile_pictures/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Meal photos
+    match /meal_photos/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Documents and files
+    match /documents/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Data exports for KVKK compliance
+    match /data_exports/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

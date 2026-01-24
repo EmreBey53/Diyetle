@@ -32,17 +32,59 @@ export const logAuditEvent = async (auditData: Omit<AuditLog, 'id' | 'timestamp'
 
 export const getAuditLogs = async (userId?: string, startDate?: Date, endDate?: Date) => {
   try {
-    let q = query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'));
-    
+    // Parametre kontrolü
+    if (userId && typeof userId !== 'string') {
+      console.warn('⚠️ getAuditLogs: Geçersiz userId');
+      return [];
+    }
+
+    // Index ile optimized query
+    let q;
     if (userId) {
-      q = query(q, where('userId', '==', userId));
+      q = query(
+        collection(db, 'audit_logs'),
+        where('userId', '==', userId),
+        orderBy('timestamp', 'desc')
+      );
+    } else {
+      q = query(
+        collection(db, 'audit_logs'),
+        orderBy('timestamp', 'desc')
+      );
     }
     
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
   } catch (error) {
     console.error('❌ Audit logs getirme hatası:', error);
-    return [];
+    
+    // Fallback: Index yoksa basit query
+    try {
+      let fallbackQ;
+      if (userId) {
+        fallbackQ = query(
+          collection(db, 'audit_logs'),
+          where('userId', '==', userId)
+        );
+      } else {
+        fallbackQ = query(collection(db, 'audit_logs'));
+      }
+      
+      const snapshot = await getDocs(fallbackQ);
+      const logs = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as AuditLog))
+        .sort((a, b) => {
+          if (!a.timestamp && !b.timestamp) return 0;
+          if (!a.timestamp) return 1;
+          if (!b.timestamp) return -1;
+          return b.timestamp.toMillis() - a.timestamp.toMillis();
+        });
+
+      return logs;
+    } catch (fallbackError) {
+      console.error('❌ Fallback audit logs hatası:', fallbackError);
+      return [];
+    }
   }
 };
 

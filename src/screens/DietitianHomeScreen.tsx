@@ -150,6 +150,10 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
       setUser(currentUser);
 
       if (currentUser) {
+        // Önce users collection'daki patient'ları patients collection'a senkronize et
+        const { syncPatientsFromUsers } = await import('../services/patientService');
+        await syncPatientsFromUsers(currentUser.id);
+
         // Load ALL data in parallel for maximum performance
         const [dashboardData, questions, recentActivities, patientTrend, bmiTrend] = await Promise.all([
           getDashboardStats(currentUser.id),
@@ -164,14 +168,19 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
         setActivities(recentActivities);
         setUnansweredCount(questions.filter((q: any) => !q.isAnswered).length);
 
+        // NaN ve Infinity değerlerini filtrele
+        const sanitizeData = (data: number[]) => data.map(v =>
+          (typeof v === 'number' && isFinite(v) && !isNaN(v)) ? v : 0
+        );
+
         setPatientChartData({
-          labels: patientTrend.labels,
-          datasets: [{ data: patientTrend.data.length > 0 ? patientTrend.data : [0] }],
+          labels: patientTrend.labels.length > 0 ? patientTrend.labels : [''],
+          datasets: [{ data: patientTrend.data.length > 0 ? sanitizeData(patientTrend.data) : [0] }],
         });
 
         setBmiChartData({
-          labels: bmiTrend.labels,
-          datasets: [{ data: bmiTrend.data.length > 0 ? bmiTrend.data : [0] }],
+          labels: bmiTrend.labels.length > 0 ? bmiTrend.labels : [''],
+          datasets: [{ data: bmiTrend.data.length > 0 ? sanitizeData(bmiTrend.data) : [0] }],
         });
       }
     } catch (error: any) {
@@ -207,14 +216,19 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
         getBMITrend(userId, mode),
       ]);
 
+      // NaN ve Infinity değerlerini filtrele
+      const sanitizeData = (data: number[]) => data.map(v =>
+        (typeof v === 'number' && isFinite(v) && !isNaN(v)) ? v : 0
+      );
+
       setPatientChartData({
-        labels: patientTrend.labels,
-        datasets: [{ data: patientTrend.data.length > 0 ? patientTrend.data : [0] }],
+        labels: patientTrend.labels.length > 0 ? patientTrend.labels : [''],
+        datasets: [{ data: patientTrend.data.length > 0 ? sanitizeData(patientTrend.data) : [0] }],
       });
 
       setBmiChartData({
-        labels: bmiTrend.labels,
-        datasets: [{ data: bmiTrend.data.length > 0 ? bmiTrend.data : [0] }],
+        labels: bmiTrend.labels.length > 0 ? bmiTrend.labels : [''],
+        datasets: [{ data: bmiTrend.data.length > 0 ? sanitizeData(bmiTrend.data) : [0] }],
       });
     } catch (error) {
       console.error('Chart data yükleme hatası:', error);
@@ -411,6 +425,26 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
               subtitleColor={colors.textLight}
               cardBackground={colors.cardBackground}
             />
+            <QuickActionCard
+              icon="videocam-outline"
+              title="Video Görüşme"
+              subtitle="Danışan Ara"
+              color="#EF4444"
+              onPress={() => navigation.navigate('VideoCallSelection')}
+              textColor={colors.text}
+              subtitleColor={colors.textLight}
+              cardBackground={colors.cardBackground}
+            />
+            <QuickActionCard
+              icon="chatbubble-ellipses-outline"
+              title="Mesajlaşma"
+              subtitle="Danışanlarla Chat"
+              color="#10B981"
+              onPress={() => navigation.navigate('ChatSelection')}
+              textColor={colors.text}
+              subtitleColor={colors.textLight}
+              cardBackground={colors.cardBackground}
+            />
           </View>
         </View>
 
@@ -454,33 +488,49 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
             </View>
           </View>
 
-          <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.chartTitle, { color: colors.text }]}>👥 Danışan Ekleme Trendi</Text>
-            <BarChart
-              data={patientChartData}
-              width={350}
-              height={220}
-              chartConfig={chartConfig}
-              style={styles.chart}
-              withVerticalLabels={true}
-              showValuesOnTopOfBars={true}
-              yAxisLabel=""
-              yAxisSuffix=""
-            />
-          </View>
+          {patientChartData.labels.length > 0 && patientChartData.datasets[0].data.some(v => v > 0) ? (
+            <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
+              <Text style={[styles.chartTitle, { color: colors.text }]}>👥 Danışan Ekleme Trendi</Text>
+              <BarChart
+                data={patientChartData}
+                width={350}
+                height={220}
+                chartConfig={chartConfig}
+                style={styles.chart}
+                withVerticalLabels={true}
+                showValuesOnTopOfBars={true}
+                yAxisLabel=""
+                yAxisSuffix=""
+                fromZero={true}
+              />
+            </View>
+          ) : (
+            <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
+              <Text style={[styles.chartTitle, { color: colors.text }]}>👥 Danışan Ekleme Trendi</Text>
+              <Text style={{ color: colors.textLight, textAlign: 'center', padding: 40 }}>Henüz veri yok</Text>
+            </View>
+          )}
 
-          <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.chartTitle, { color: colors.text }]}>📊 Ortalama BMI Trendi</Text>
-            <LineChart
-              data={bmiChartData}
-              width={350}
-              height={220}
-              chartConfig={chartConfig}
-              style={styles.chart}
-              withVerticalLabels={true}
-              withDots={true}
-            />
-          </View>
+          {bmiChartData.labels.length > 0 && bmiChartData.datasets[0].data.some(v => v > 0) ? (
+            <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
+              <Text style={[styles.chartTitle, { color: colors.text }]}>📊 Ortalama BMI Trendi</Text>
+              <LineChart
+                data={bmiChartData}
+                width={350}
+                height={220}
+                chartConfig={chartConfig}
+                style={styles.chart}
+                withVerticalLabels={true}
+                withDots={true}
+                fromZero={true}
+              />
+            </View>
+          ) : (
+            <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
+              <Text style={[styles.chartTitle, { color: colors.text }]}>📊 Ortalama BMI Trendi</Text>
+              <Text style={{ color: colors.textLight, textAlign: 'center', padding: 40 }}>Henüz veri yok</Text>
+            </View>
+          )}
         </View>
 
         {/* Daily Goal Card */}

@@ -86,9 +86,11 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
         const profile = await getPatientProfileByUserId(user.id);
         setPatientProfile(profile);
         console.log('👤 Patient profile:', profile);
-        if (profile?.id) {
-          await loadPhotos(profile.id);
-        }
+        
+        // Patient profile varsa onun ID'sini kullan, yoksa user ID'yi kullan
+        const patientIdToUse = profile?.id || user.id;
+        console.log('📸 Photos yükleniyor, Patient ID:', patientIdToUse);
+        await loadPhotos(patientIdToUse);
       }
     } catch (error) {
       console.error('Error loading user:', error);
@@ -227,14 +229,16 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
       // Get base64 from image
       let base64Data = await uriToBase64(selectedImage);
 
-      // Upload photo - Use patientProfile.id (document ID) instead of currentUser.id (userId)
-      if (!patientProfile?.id) {
-        throw new Error('Patient profile not found');
+      // Upload photo - Use patientProfile.id if available, otherwise use currentUser.id
+      const patientIdToUse = patientProfile?.id || currentUser?.id;
+      
+      if (!patientIdToUse) {
+        throw new Error('Patient ID not found');
       }
 
-      console.log('📤 Uploading photo for patient ID:', patientProfile.id);
+      console.log('📤 Uploading photo for patient ID:', patientIdToUse);
       await uploadMealPhoto(
-        patientProfile.id,
+        patientIdToUse,
         selectedImage,
         base64Data,
         selectedMealType,
@@ -252,9 +256,8 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
             setMealName('');
             setMessageText('');
             setShowAnalysisModal(false);
-            if (patientProfile?.id) {
-              await loadPhotos(patientProfile.id);
-            }
+            // Reload photos with the same ID used for upload
+            await loadPhotos(patientIdToUse);
           },
         },
       ]);

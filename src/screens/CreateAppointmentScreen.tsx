@@ -31,7 +31,8 @@ interface TimeSlot {
   display: string;
 }
 
-export default function CreateAppointmentScreen({ navigation }: any) {
+export default function CreateAppointmentScreen({ route, navigation }: any) {
+  const { patientId, patientName } = route.params || {};
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
@@ -42,6 +43,7 @@ export default function CreateAppointmentScreen({ navigation }: any) {
   const [showPatientModal, setShowPatientModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [markedDates, setMarkedDates] = useState<any>({});
+  const [meetingType, setMeetingType] = useState<'link' | 'app'>('app'); // Yeni: Görüşme türü
 
   useEffect(() => {
     loadUser();
@@ -55,6 +57,11 @@ export default function CreateAppointmentScreen({ navigation }: any) {
         await loadPatients(user.id);
       }
       setTodayAsDefault();
+      
+      // Eğer route'dan hasta bilgisi geldiyse otomatik seç
+      if (patientId && patientName) {
+        setSelectedPatient({ id: patientId, name: patientName });
+      }
     } catch (error) {
       console.error('Error loading user:', error);
     }
@@ -115,16 +122,19 @@ export default function CreateAppointmentScreen({ navigation }: any) {
       Alert.alert('Uyarı', 'Lütfen bir hasta seçiniz');
       return false;
     }
-    if (!meetingLink.trim()) {
-      Alert.alert('Uyarı', 'Lütfen meeting linki giriniz');
-      return false;
-    }
-
-    try {
-      new URL(meetingLink);
-    } catch {
-      Alert.alert('Hata', 'Lütfen geçerli bir URL giriniz');
-      return false;
+    
+    // Sadece link türü seçildiyse link kontrolü yap
+    if (meetingType === 'link') {
+      if (!meetingLink.trim()) {
+        Alert.alert('Uyarı', 'Lütfen meeting linki giriniz');
+        return false;
+      }
+      try {
+        new URL(meetingLink);
+      } catch {
+        Alert.alert('Hata', 'Lütfen geçerli bir URL giriniz');
+        return false;
+      }
     }
 
     return true;
@@ -135,20 +145,29 @@ export default function CreateAppointmentScreen({ navigation }: any) {
 
     setLoading(true);
     try {
+      const finalMeetingLink = meetingType === 'app' 
+        ? `diyetle://video-call/${selectedPatient!.id}` 
+        : meetingLink;
+
       await createAppointment(
         currentUser.id,
         {
           patientId: selectedPatient!.id,
           date: selectedDate,
           time: selectedTime,
-          meetingLink,
+          meetingLink: finalMeetingLink,
           notes,
+          meetingType, // Görüşme türünü kaydet
         },
         selectedPatient!.name,
         currentUser.displayName || 'Diyetisyen'
       );
 
-      Alert.alert('Başarılı', 'Randevu başarıyla oluşturuldu', [
+      const successMessage = meetingType === 'app' 
+        ? 'Randevu başarıyla oluşturuldu. Görüşme uygulama üzerinden yapılacak.'
+        : 'Randevu başarıyla oluşturuldu. Meeting linki hasta ile paylaşıldı.';
+
+      Alert.alert('Başarılı', successMessage, [
         {
           text: 'Tamam',
           onPress: () => {
@@ -265,18 +284,81 @@ export default function CreateAppointmentScreen({ navigation }: any) {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Meeting Linki</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="https://zoom.us/j/..."
-          value={meetingLink}
-          onChangeText={setMeetingLink}
-          placeholderTextColor="#999"
-        />
-        <Text style={styles.helperText}>
-          Zoom, Google Meet, Microsoft Teams vb. linki ekleyiniz
-        </Text>
+        <Text style={styles.sectionTitle}>Görüşme Türü</Text>
+        <View style={styles.meetingTypeContainer}>
+          <TouchableOpacity
+            style={[
+              styles.meetingTypeOption,
+              meetingType === 'app' && styles.meetingTypeOptionSelected,
+            ]}
+            onPress={() => setMeetingType('app')}
+          >
+            <Ionicons 
+              name="videocam" 
+              size={20} 
+              color={meetingType === 'app' ? '#fff' : '#65C18C'} 
+            />
+            <Text
+              style={[
+                styles.meetingTypeText,
+                meetingType === 'app' && styles.meetingTypeTextSelected,
+              ]}
+            >
+              Uygulama Üzerinden
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.meetingTypeOption,
+              meetingType === 'link' && styles.meetingTypeOptionSelected,
+            ]}
+            onPress={() => setMeetingType('link')}
+          >
+            <Ionicons 
+              name="link" 
+              size={20} 
+              color={meetingType === 'link' ? '#fff' : '#65C18C'} 
+            />
+            <Text
+              style={[
+                styles.meetingTypeText,
+                meetingType === 'link' && styles.meetingTypeTextSelected,
+              ]}
+            >
+              Harici Link
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {meetingType === 'link' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Meeting Linki</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="https://zoom.us/j/..."
+            value={meetingLink}
+            onChangeText={setMeetingLink}
+            placeholderTextColor="#999"
+          />
+          <Text style={styles.helperText}>
+            Zoom, Google Meet, Microsoft Teams vb. linki ekleyiniz
+          </Text>
+        </View>
+      )}
+
+      {meetingType === 'app' && (
+        <View style={styles.section}>
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={20} color="#2196F3" />
+            <Text style={styles.infoText}>
+              Görüşme uygulama içindeki video call sistemi ile yapılacaktır. 
+              Randevu zamanında hasta ve diyetisyen uygulamadan görüşmeye katılabilir.
+            </Text>
+          </View>
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notlar (İsteğe Bağlı)</Text>
@@ -513,5 +595,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 4,
+  },
+  meetingTypeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  meetingTypeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#65C18C',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  meetingTypeOptionSelected: {
+    backgroundColor: '#65C18C',
+  },
+  meetingTypeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#65C18C',
+  },
+  meetingTypeTextSelected: {
+    color: '#fff',
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#333',
+    lineHeight: 18,
   },
 });

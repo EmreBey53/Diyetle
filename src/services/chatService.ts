@@ -44,6 +44,12 @@ export interface ChatAttachment {
 // Chat odası oluşturma
 export const createChatRoom = async (patientId: string, dietitianId: string, patientName: string, dietitianName: string) => {
   try {
+    // Parametre kontrolü
+    if (!patientId || !dietitianId || !patientName || !dietitianName) {
+      console.warn('⚠️ createChatRoom: Gerekli parametreler eksik');
+      throw new Error('Gerekli parametreler eksik');
+    }
+
     // Mevcut chat odası var mı kontrol et
     const existingRoom = await getChatRoom(patientId, dietitianId);
     if (existingRoom) {
@@ -83,6 +89,12 @@ export const createChatRoom = async (patientId: string, dietitianId: string, pat
 // Mesaj gönderme
 export const sendMessage = async (message: Omit<ChatMessage, 'id' | 'timestamp' | 'isRead' | 'isEdited'>) => {
   try {
+    // Parametre kontrolü
+    if (!message.chatRoomId || !message.senderId || !message.message) {
+      console.warn('⚠️ sendMessage: Gerekli mesaj parametreleri eksik');
+      throw new Error('Gerekli mesaj parametreleri eksik');
+    }
+
     const newMessage: Omit<ChatMessage, 'id'> = {
       ...message,
       timestamp: Timestamp.now(),
@@ -97,6 +109,9 @@ export const sendMessage = async (message: Omit<ChatMessage, 'id' | 'timestamp' 
     
     // Okunmamış mesaj sayısını artır
     await incrementUnreadCount(message.chatRoomId, message.senderId);
+
+    // Chat odası bilgilerini al ve karşı tarafa bildirim gönder
+    await sendChatNotificationToRecipient(message.chatRoomId, message.senderId, message.senderName, message.message);
 
     await logAuditEvent({
       userId: message.senderId,
@@ -118,6 +133,14 @@ export const sendMessage = async (message: Omit<ChatMessage, 'id' | 'timestamp' 
 
 // Mesajları dinleme (real-time)
 export const subscribeToMessages = (chatRoomId: string, callback: (messages: ChatMessage[]) => void) => {
+  // Parametre kontrolü
+  if (!chatRoomId) {
+    console.warn('⚠️ subscribeToMessages: chatRoomId eksik');
+    callback([]);
+    return () => {}; // Empty unsubscribe function
+  }
+
+  // Index ile çalışan optimized query
   const q = query(
     collection(db, 'chat_messages'),
     where('chatRoomId', '==', chatRoomId),
@@ -130,13 +153,42 @@ export const subscribeToMessages = (chatRoomId: string, callback: (messages: Cha
       ...doc.data()
     } as ChatMessage));
     callback(messages);
+  }, (error) => {
+    console.error('❌ Chat mesajları dinleme hatası:', error);
+    // Fallback: Index yoksa basit query kullan
+    const fallbackQ = query(
+      collection(db, 'chat_messages'),
+      where('chatRoomId', '==', chatRoomId)
+    );
+    
+    return onSnapshot(fallbackQ, (snapshot) => {
+      const messages = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as ChatMessage))
+        .sort((a, b) => {
+          const aTime = a.timestamp?.toMillis() || 0;
+          const bTime = b.timestamp?.toMillis() || 0;
+          return aTime - bTime;
+        });
+      callback(messages);
+    });
   });
 };
 
 // Chat odalarını getirme
 export const getChatRooms = async (userId: string, userRole: 'patient' | 'dietitian') => {
   try {
+    // Parametre kontrolü
+    if (!userId || !userRole) {
+      console.warn('⚠️ getChatRooms: userId veya userRole eksik');
+      return [];
+    }
+
     const field = userRole === 'patient' ? 'patientId' : 'dietitianId';
+    
+    // Index ile optimized query
     const q = query(
       collection(db, 'chat_rooms'),
       where(field, '==', userId),
@@ -151,38 +203,86 @@ export const getChatRooms = async (userId: string, userRole: 'patient' | 'dietit
     } as ChatRoom));
   } catch (error) {
     console.error('❌ Chat odaları getirme hatası:', error);
-    return [];
+    
+    // Fallback: Index yoksa basit query
+    try {
+      const field = userRole === 'patient' ? 'patientId' : 'dietitianId';
+      const fallbackQ = query(
+        collection(db, 'chat_rooms'),
+        where(field, '==', userId)
+      );
+
+      const snapshot = await getDocs(fallbackQ);
+      const rooms = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as ChatRoom))
+        .filter(room => room.isActive)
+        .sort((a, b) => {
+          if (!a.lastMessageTime && !b.lastMessageTime) return 0;
+          if (!a.lastMessageTime) return 1;
+          if (!b.lastMessageTime) return -1;
+          return b.lastMessageTime.toMillis() - a.lastMessageTime.toMillis();
+        });
+
+      return rooms;
+    } catch (fallbackError) {
+      console.error('❌ Fallback chat odaları getirme hatası:', fallbackError);
+      return [];
+    }
   }
 };
 
 // Mesajları okundu olarak işaretle
 export const markMessagesAsRead = async (chatRoomId: string, userId: string) => {
   try {
+    // Parametre kontrolü
+    if (!chatRoomId || !userId) {
+      console.warn('⚠️ markMessagesAsRead: chatRoomId veya userId eksik');
+      return;
+    }
+
+    // Basit query - sadece chatRoomId ve isRead ile
     const q = query(
       collection(db, 'chat_messages'),
       where('chatRoomId', '==', chatRoomId),
-      where('senderId', '!=', userId),
       where('isRead', '==', false)
     );
 
     const snapshot = await getDocs(q);
-    const updatePromises = snapshot.docs.map(doc => 
-      updateDoc(doc.ref, { isRead: true })
+    
+    // Client-side filtering (senderId != userId)
+    const messagesToUpdate = snapshot.docs.filter(doc => 
+      doc.data().senderId !== userId
     );
+    
+    if (messagesToUpdate.length > 0) {
+      const updatePromises = messagesToUpdate.map(doc => 
+        updateDoc(doc.ref, { isRead: true })
+      );
 
-    await Promise.all(updatePromises);
+      await Promise.all(updatePromises);
+      console.log(`✅ ${messagesToUpdate.length} mesaj okundu olarak işaretlendi`);
+    }
     
     // Okunmamış sayısını sıfırla
     await resetUnreadCount(chatRoomId, userId);
 
-    console.log('✅ Mesajlar okundu olarak işaretlendi');
   } catch (error) {
     console.error('❌ Mesaj okundu işaretleme hatası:', error);
+    // Hata olsa bile devam et
   }
 };
 
 // Yardımcı fonksiyonlar
 const getChatRoom = async (patientId: string, dietitianId: string) => {
+  // Parametre kontrolü
+  if (!patientId || !dietitianId) {
+    console.warn('⚠️ getChatRoom: patientId veya dietitianId eksik');
+    return null;
+  }
+
   const q = query(
     collection(db, 'chat_rooms'),
     where('patientId', '==', patientId),
@@ -208,4 +308,40 @@ const incrementUnreadCount = async (chatRoomId: string, senderId: string) => {
 const resetUnreadCount = async (chatRoomId: string, userId: string) => {
   // Bu fonksiyon karmaşık olduğu için basitleştirilmiş
   console.log('Okunmamış mesaj sayısı sıfırlandı');
+};
+
+// Chat bildirimi gönderme
+const sendChatNotificationToRecipient = async (chatRoomId: string, senderId: string, senderName: string, message: string) => {
+  try {
+    // Chat odası bilgilerini al
+    const q = query(
+      collection(db, 'chat_rooms'),
+      where('__name__', '==', chatRoomId)
+    );
+    
+    const chatRoomDoc = await getDocs(q);
+
+    if (!chatRoomDoc.empty) {
+      const chatRoom = chatRoomDoc.docs[0].data() as ChatRoom;
+      
+      // Karşı tarafın ID'sini bul
+      const recipientId = chatRoom.patientId === senderId ? chatRoom.dietitianId : chatRoom.patientId;
+      
+      if (recipientId) {
+        console.log(`💬 Chat bildirimi gönderiliyor: ${senderName} -> ${recipientId}`);
+        
+        // Dinamik import ile circular dependency'yi önle
+        const { sendChatNotification } = await import('./smartNotificationService');
+        await sendChatNotification(recipientId, senderName, message, chatRoomId);
+        
+        console.log('✅ Chat bildirimi başarıyla gönderildi');
+      } else {
+        console.warn('⚠️ Alıcı ID bulunamadı');
+      }
+    } else {
+      console.warn('⚠️ Chat odası bulunamadı:', chatRoomId);
+    }
+  } catch (error) {
+    console.error('❌ Chat bildirimi gönderme hatası:', error);
+  }
 };

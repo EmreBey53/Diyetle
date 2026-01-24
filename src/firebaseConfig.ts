@@ -1,21 +1,28 @@
 // src/firebaseConfig.ts
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+// @ts-ignore - React Native persistence is available in firebase/auth/react-native
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import { ENV } from './config/env';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAA9Ah1D2ZSlI4TXl9PA2x7f4I8stqNsVo",
-  authDomain: "diyetle-43a12.firebaseapp.com",
-  projectId: "diyetle-43a12",
-  storageBucket: "diyetle-43a12.firebasestorage.app",
-  messagingSenderId: "727199954922",
-  appId: "1:727199954922:web:fca8a5a13c6eade9126493"
+  apiKey: ENV.FIREBASE_API_KEY,
+  authDomain: ENV.FIREBASE_AUTH_DOMAIN,
+  projectId: ENV.FIREBASE_PROJECT_ID,
+  storageBucket: ENV.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: ENV.FIREBASE_MESSAGING_SENDER_ID,
+  appId: ENV.FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
+// Auth persistence ile başlat
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+});
+
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export default app;
