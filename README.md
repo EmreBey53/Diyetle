@@ -4,27 +4,27 @@ Diyetisyen ve hasta arasındaki iletişimi kolaylaştıran, diyet planı yöneti
 
 ## Teknolojiler
 
-- **Framework**: React Native 0.81.5 / Expo ~54.0.31
+- **Framework**: React Native 0.81.5
 - **Dil**: TypeScript 5.9.2
 - **Backend**: Firebase (Authentication, Firestore)
 - **Navigasyon**: React Navigation (Stack, Bottom Tabs)
 - **Gerçek Zamanlı İletişim**: WebRTC (görüntülü görüşme), Firebase Chat
-- **Güvenlik**: expo-secure-store, expo-crypto (SHA-256)
+- **Güvenlik**: SecureStore, Crypto (SHA-256)
 - **Test**: Jest + ts-jest (83 test)
 
 ## Kurulum
 
 ```bash
 npm install
-npx expo start
+npm start
 ```
 
 ## Platformlar
 
 ```bash
-npx expo run:android   # Android
-npx expo run:ios       # iOS
-npx expo start --web   # Web
+npm run android   # Android
+npm run ios       # iOS
+npm run web       # Web
 ```
 
 ## Testler
@@ -57,8 +57,8 @@ npm run test:coverage  # Coverage raporu
 ## Güvenlik
 
 - Şifreler Firebase Auth ile yönetilir, cihazda saklanmaz
-- Oturum verisi `expo-secure-store` ile şifreli olarak saklanır
-- Token üretiminde `expo-crypto` (kriptografik güvenli rastgele) kullanılır
+- Oturum verisi SecureStore ile şifreli olarak saklanır
+- Token üretiminde kriptografik güvenli rastgele sayı üreteci kullanılır
 - Hash işlemleri SHA-256 ile gerçekleştirilir
 - KVKK uyumlu: kullanıcı verisi silme talebi `writeBatch` ile atomik olarak işlenir
 
