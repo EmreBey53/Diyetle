@@ -12,28 +12,6 @@ Diyetisyen ve hasta arasındaki iletişimi kolaylaştıran, diyet planı yöneti
 - **Güvenlik**: SecureStore, Crypto (SHA-256)
 - **Test**: Jest + ts-jest (83 test)
 
-## Kurulum
-
-```bash
-npm install
-npm start
-```
-
-## Platformlar
-
-```bash
-npm run android   # Android
-npm run ios       # iOS
-npm run web       # Web
-```
-
-## Testler
-
-```bash
-npm test               # Tüm testleri çalıştır
-npm run test:coverage  # Coverage raporu
-```
-
 ## Özellikler
 
 ### Hasta
