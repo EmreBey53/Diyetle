@@ -1,4 +1,3 @@
-// src/screens/ChatScreen.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -21,8 +20,7 @@ import { getCurrentUser } from '../services/authService';
 
 const { width } = Dimensions.get('window');
 
-// Emoji listesi
-const EMOJI_LIST = ['😊', '😂', '❤️', '👍', '👎', '😢', '😮', '😡', '🎉', '🔥', '💪', '🙏', '👏', '✨', '💯', '🎯'];
+const EMOJI_LIST =['😊', '😂', '❤️', '👍', '👎', '😢', '😮', '😡', '🎉', '🔥', '💪', '🙏', '👏', '✨', '💯', '🎯'];
 
 export default function ChatScreen({ route, navigation }: any) {
   const { chatRoomId, otherUserName, otherUserId } = route.params;
@@ -65,7 +63,6 @@ export default function ChatScreen({ route, navigation }: any) {
       const user = await getCurrentUser();
       setCurrentUser(user);
     } catch (error) {
-      console.error('❌ Kullanıcı yükleme hatası:', error);
       Alert.alert('Hata', 'Kullanıcı bilgileri yüklenemedi');
     }
   };
@@ -96,7 +93,6 @@ export default function ChatScreen({ route, navigation }: any) {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error) {
-      console.error('❌ Mesaj gönderme hatası:', error);
       Alert.alert('Hata', 'Mesaj gönderilemedi');
     } finally {
       setIsTyping(false);

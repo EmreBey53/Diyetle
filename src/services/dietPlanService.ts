@@ -1,4 +1,3 @@
-// src/services/dietPlanService.ts
 import { db } from '../firebaseConfig';
 import {
   collection,
@@ -15,7 +14,6 @@ import { DietPlan, Meal } from '../models/DietPlan';
 
 const DIET_PLANS_COLLECTION = 'dietPlans';
 
-// Diyet planı oluştur
 export const createDietPlan = async (planData: Omit<DietPlan, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   try {
     const plan = {
@@ -25,15 +23,12 @@ export const createDietPlan = async (planData: Omit<DietPlan, 'id' | 'createdAt'
     };
 
     const docRef = await addDoc(collection(db, DIET_PLANS_COLLECTION), plan);
-    console.log('✅ Diyet planı oluşturuldu, ID:', docRef.id);
     return docRef.id;
   } catch (error: any) {
-    console.error('❌ Diyet planı oluşturma hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Danışanın diyet planlarını getir
 export const getDietPlansByPatient = async (patientId: string): Promise<DietPlan[]> => {
   try {
     const q = query(
@@ -46,7 +41,6 @@ export const getDietPlansByPatient = async (patientId: string): Promise<DietPlan
     const plans: DietPlan[] = querySnapshot.docs.map((doc) => {
       const data = doc.data();
       
-      // expiryDate yoksa otomatik set et (1 hafta sonra)
       let expiryDate = data.expiryDate;
       if (!expiryDate) {
         const startDate = data.startDate?.toDate?.() || new Date(data.startDate) || new Date();
@@ -65,19 +59,16 @@ export const getDietPlansByPatient = async (patientId: string): Promise<DietPlan
       } as DietPlan;
     });
 
-    // JavaScript'te sırala (en yeni en üstte)
     return plans.sort((a, b) => {
       const dateA = typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt;
       const dateB = typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt;
       return dateB.getTime() - dateA.getTime();
     });
   } catch (error: any) {
-    console.error('❌ Diyet planları yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Aktif diyet planını getir (single)
 export const getActiveDietPlan = async (patientId: string): Promise<DietPlan | null> => {
   try {
     const q = query(
@@ -104,34 +95,28 @@ export const getActiveDietPlan = async (patientId: string): Promise<DietPlan | n
       updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
     } as DietPlan;
   } catch (error: any) {
-    console.error('❌ Aktif diyet planı yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Aktif diyetleri getir (array)
 export const getActiveDietPlans = async (patientId: string): Promise<DietPlan[]> => {
   try {
     const allPlans = await getDietPlansByPatient(patientId);
     return allPlans.filter((plan) => plan.isActive === true);
   } catch (error: any) {
-    console.error('❌ Aktif diyet planları yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Süresi dolmuş diyetleri getir
 export const getExpiredDietPlans = async (patientId: string): Promise<DietPlan[]> => {
   try {
     const allPlans = await getDietPlansByPatient(patientId);
     return allPlans.filter((plan) => plan.isActive === false);
   } catch (error: any) {
-    console.error('❌ Süresi dolmuş diyet planları yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Diyet planı güncelle
 export const updateDietPlan = async (planId: string, updates: Partial<DietPlan>): Promise<void> => {
   try {
     const updateData = {
@@ -141,43 +126,32 @@ export const updateDietPlan = async (planId: string, updates: Partial<DietPlan>)
 
     const planRef = doc(db, DIET_PLANS_COLLECTION, planId);
     await updateDoc(planRef, updateData);
-    console.log('✅ Diyet planı güncellendi');
   } catch (error: any) {
-    console.error('❌ Diyet planı güncelleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Diyet süresi değiştir - FIXED
 export const updateDietExpiryDate = async (
   planId: string,
   newExpiryDay: number = 0,
   newExpiryTime: string = '18:00'
 ): Promise<void> => {
   try {
-    console.log('🔄 [updateDietExpiryDate] Başladı - planId:', planId);
-    console.log('📅 [updateDietExpiryDate] Seçilen Gün:', newExpiryDay);
-    console.log('⏰ [updateDietExpiryDate] Seçilen Saat:', newExpiryTime);
-
-    // Yeni tarihini hesapla
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
     let expiryDate = new Date(today);
 
-    // Eğer bugün istenen gün ise bugünü kullan, değilse sonraki haftanın o günü bulunuz
     if (expiryDate.getDay() === newExpiryDay) {
-      // Bugün istenen gün
       const [hours, minutes] = newExpiryTime.split(':').map(Number);
       expiryDate.setHours(hours, minutes, 0, 0);
-      
-      // Eğer zaman geçmişse, sonraki haftaya git
+
+      // If the time has already passed today, move to next week
       const now = new Date();
       if (expiryDate < now) {
         expiryDate.setDate(expiryDate.getDate() + 7);
       }
     } else {
-      // Sonraki istenen günü bul
       let daysAhead = newExpiryDay - expiryDate.getDay();
       if (daysAhead <= 0) {
         daysAhead += 7;
@@ -188,9 +162,6 @@ export const updateDietExpiryDate = async (
       expiryDate.setHours(hours, minutes, 0, 0);
     }
 
-    console.log('📅 [updateDietExpiryDate] Hesaplanan expiryDate:', expiryDate);
-
-    // Firebase'e kaydet
     const planRef = doc(db, DIET_PLANS_COLLECTION, planId);
     const updateData = {
       expiryDate: expiryDate,
@@ -199,30 +170,22 @@ export const updateDietExpiryDate = async (
       updatedAt: new Date(),
     };
 
-    console.log('💾 [updateDietExpiryDate] Firebase\'ye kaydediliyor:', updateData);
-
     await updateDoc(planRef, updateData);
 
-    console.log('✅ [updateDietExpiryDate] Firebase\'ye başarıyla kaydedildi!');
   } catch (error: any) {
-    console.error('❌ [updateDietExpiryDate] Hata:', error);
     throw new Error(error.message);
   }
 };
 
-// Diyet planı sil
 export const deleteDietPlan = async (planId: string): Promise<void> => {
   try {
     const planRef = doc(db, DIET_PLANS_COLLECTION, planId);
     await deleteDoc(planRef);
-    console.log('✅ Diyet planı silindi');
   } catch (error: any) {
-    console.error('❌ Diyet planı silme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Diyet planı detayını getir
 export const getDietPlanById = async (planId: string): Promise<DietPlan | null> => {
   try {
     const docRef = doc(db, DIET_PLANS_COLLECTION, planId);
@@ -234,14 +197,13 @@ export const getDietPlanById = async (planId: string): Promise<DietPlan | null> 
 
     const data = docSnap.data();
     
-    // expiryDate yoksa otomatik set et
     let expiryDate = data.expiryDate;
     if (!expiryDate) {
       const startDate = data.startDate?.toDate?.() || new Date(data.startDate) || new Date();
       expiryDate = new Date(startDate);
       expiryDate.setDate(expiryDate.getDate() + 7);
     }
-    
+
     return {
       ...data,
       id: docSnap.id,
@@ -252,12 +214,10 @@ export const getDietPlanById = async (planId: string): Promise<DietPlan | null> 
       updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
     } as DietPlan;
   } catch (error: any) {
-    console.error('❌ Diyet planı getirme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Diyetisyenin danışanlarını expiry info ile getir - FIXED
 export const getDietitianPatientsWithExpiryInfo = async (dietitianId: string): Promise<Array<{
   patientId: string;
   patientName: string;
@@ -265,40 +225,32 @@ export const getDietitianPatientsWithExpiryInfo = async (dietitianId: string): P
   daysUntilExpiry?: number;
 }>> => {
   try {
-    console.log('🔄 getDietitianPatientsWithExpiryInfo başladı - dietitianId:', dietitianId);
-    
-    // TÜM diyetleri getir
     const q = query(
       collection(db, DIET_PLANS_COLLECTION),
       where('dietitianId', '==', dietitianId)
     );
 
     const querySnapshot = await getDocs(q);
-    console.log('📊 Toplam diyet sayısı:', querySnapshot.size);
 
     const patientsMap = new Map();
 
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
       
-      // expiryDate yoksa otomatik set et
       let expiryDate = data.expiryDate;
-      
-      // Firestore Timestamp'i Date'e çevir
+
       if (expiryDate && typeof expiryDate === 'object' && expiryDate.toDate) {
         expiryDate = expiryDate.toDate();
       } else if (typeof expiryDate === 'string') {
         expiryDate = new Date(expiryDate);
       }
       
-      // Hala yoksa otomatik set et
       if (!expiryDate) {
         const startDate = data.startDate?.toDate?.() || new Date(data.startDate) || new Date();
         expiryDate = new Date(startDate);
         expiryDate.setDate(expiryDate.getDate() + 7);
       }
       
-      // KALAN GÜNÜ HESAPLA
       const daysLeft = Math.ceil(
         (expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
       );
@@ -313,7 +265,6 @@ export const getDietitianPatientsWithExpiryInfo = async (dietitianId: string): P
         updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
       } as DietPlan;
 
-      // SADECE aktif diyetleri ekle
       const isActive = data.isActive !== false && data.status !== 'expired';
       
       if (isActive) {
@@ -328,18 +279,14 @@ export const getDietitianPatientsWithExpiryInfo = async (dietitianId: string): P
         }
 
         patientsMap.get(patientKey).activeDiets.push(diet);
-        console.log(`✅ Aktif diyet bulundu: ${data.patientName} - ${diet.title} (${daysLeft} gün)`);
       } else {
-        console.log(`⏭️ Pasif/Süresi dolmuş diyet atlandı: ${data.patientName} - ${data.title}`);
       }
     });
 
     const result = Array.from(patientsMap.values());
-    console.log('📋 Sonuç - danışan sayısı:', result.length);
     
     return result;
   } catch (error: any) {
-    console.error('❌ Diyetisyen danışanları getirme hatası:', error);
     throw new Error(error.message);
   }
 };

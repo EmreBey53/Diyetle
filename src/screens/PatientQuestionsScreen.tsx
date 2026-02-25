@@ -1,4 +1,3 @@
-// src/screens/PatientQuestionsScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -51,7 +50,6 @@ export default function PatientQuestionsScreen({ navigation }: any) {
       const questionsData = await getQuestionsByPatient(profile.id!);
       setQuestions(questionsData);
     } catch (error: any) {
-      console.error('❌ Sorular yükleme hatası:', error);
     } finally {
       setLoading(false);
     }

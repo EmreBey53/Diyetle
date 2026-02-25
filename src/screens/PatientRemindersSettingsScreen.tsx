@@ -1,4 +1,3 @@
-// src/screens/PatientRemindersSettingsScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -105,7 +104,6 @@ export default function PatientRemindersSettingsScreen({ route, navigation }: an
 
       setReminders(data);
     } catch (error) {
-      console.error('Error loading reminders:', error);
       Alert.alert('Hata', 'Hatırlatıcılar yüklenirken hata oluştu');
     } finally {
       setLoading(false);
@@ -137,7 +135,6 @@ export default function PatientRemindersSettingsScreen({ route, navigation }: an
       Alert.alert('Başarılı', 'Hatırlatıcılar kaydedildi! 🎉');
       await loadReminders();
     } catch (error) {
-      console.error('Error saving reminders:', error);
       Alert.alert('Hata', 'Hatırlatıcılar kaydedilirken hata oluştu');
     } finally {
       setSaving(false);
@@ -176,7 +173,6 @@ export default function PatientRemindersSettingsScreen({ route, navigation }: an
       Alert.alert('Başarılı', 'Custom hatırlatıcı eklendi!');
       await loadReminders();
     } catch (error) {
-      console.error('Error adding custom reminder:', error);
       Alert.alert('Hata', 'Custom hatırlatıcı eklenirken hata oluştu');
     } finally {
       setSaving(false);

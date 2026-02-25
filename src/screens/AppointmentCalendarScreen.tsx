@@ -1,4 +1,3 @@
-// src/screens/AppointmentCalendarScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -63,14 +62,12 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
         setAppointments(history);
       }
     } catch (error) {
-      console.error('❌ Kullanıcı verileri yükleme hatası:', error);
     }
   };
 
   const loadAvailableSlots = async () => {
     try {
       if (!currentUser?.id || !selectedDate) {
-        console.warn('⚠️ loadAvailableSlots: Gerekli parametreler eksik');
         return;
       }
 
@@ -94,7 +91,6 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
         setAvailableSlots(slots);
       }
     } catch (error) {
-      console.error('❌ Slotlar yükleme hatası:', error);
       setAvailableSlots([]);
     }
   };
@@ -217,7 +213,6 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
 
   const editSlot = (slot: any) => {
     // Slot düzenleme modalı açılacak
-    console.log('Slot düzenleme:', slot);
   };
 
   const getMarkedDates = () => {

@@ -1,4 +1,3 @@
-// src/components/PatientsModal.tsx
 import React from 'react';
 import {
   View,

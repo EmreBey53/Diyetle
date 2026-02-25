@@ -32,7 +32,6 @@ const MEAL_TYPES: { type: MealType; emoji: string; label: string }[] = [
   { type: 'snack', emoji: '🍎', label: 'Ara Öğün' },
 ];
 
-// Helper: URI to Base64
 const uriToBase64 = async (uri: string): Promise<string> => {
   try {
     const response = await fetch(uri);
@@ -47,7 +46,6 @@ const uriToBase64 = async (uri: string): Promise<string> => {
       reader.readAsDataURL(blob);
     });
   } catch (error) {
-    console.error('URI to Base64 error:', error);
     throw error;
   }
 };
@@ -85,15 +83,12 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
         // Get patient profile by userId to get the patientId (document ID)
         const profile = await getPatientProfileByUserId(user.id);
         setPatientProfile(profile);
-        console.log('👤 Patient profile:', profile);
         
         // Patient profile varsa onun ID'sini kullan, yoksa user ID'yi kullan
         const patientIdToUse = profile?.id || user.id;
-        console.log('📸 Photos yükleniyor, Patient ID:', patientIdToUse);
         await loadPhotos(patientIdToUse);
       }
     } catch (error) {
-      console.error('Error loading user:', error);
     }
   };
 
@@ -103,7 +98,6 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
       const photosList = await getPatientMealPhotos(patientId);
       setPhotos(photosList);
     } catch (error) {
-      console.error('Error loading photos:', error);
       Alert.alert('Hata', 'Fotoğraflar yüklenirken hata oluştu');
     } finally {
       setLoading(false);
@@ -136,7 +130,6 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
         let base64Data = asset.base64;
 
         if (!base64Data) {
-          console.log('⚠️ Base64 yok, URI\'den çevriliyor...');
           base64Data = await uriToBase64(asset.uri);
         }
 
@@ -146,7 +139,6 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
         setShowMessageModal(true);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
       Alert.alert('Hata', 'Fotoğraf seçilirken hata oluştu');
     }
   };
@@ -177,7 +169,6 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
         let base64Data = asset.base64;
 
         if (!base64Data) {
-          console.log('⚠️ Base64 yok, URI\'den çevriliyor...');
           base64Data = await uriToBase64(asset.uri);
         }
 
@@ -187,7 +178,6 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
         setShowMessageModal(true);
       }
     } catch (error) {
-      console.error('Error taking photo:', error);
       Alert.alert('Hata', 'Fotoğraf çekilirken hata oluştu');
     }
   };
@@ -210,7 +200,6 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
       setAnalysisResult(result);
       setShowAnalysisModal(true);
     } catch (error) {
-      console.error('Error analyzing image:', error);
       Alert.alert('Hata', 'Fotoğraf analiz edilirken hata oluştu');
     } finally {
       setIsAnalyzing(false);
@@ -236,7 +225,6 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
         throw new Error('Patient ID not found');
       }
 
-      console.log('📤 Uploading photo for patient ID:', patientIdToUse);
       await uploadMealPhoto(
         patientIdToUse,
         selectedImage,
@@ -262,7 +250,6 @@ export default function PatientMealPhotoScreen({ navigation }: any) {
         },
       ]);
     } catch (error) {
-      console.error('Error uploading photo:', error);
       Alert.alert('Hata', 'Fotoğraf yüklenirken hata oluştu');
     } finally {
       setIsAnalyzing(false);

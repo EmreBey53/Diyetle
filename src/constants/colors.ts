@@ -1,4 +1,3 @@
-// src/constants/colors.ts
 
 // Light Theme Colors
 export const lightColors = {

@@ -1,6 +1,5 @@
-// src/services/kvkkService.ts
 import { db } from '../firebaseConfig';
-import { doc, setDoc, getDoc, updateDoc, deleteDoc, Timestamp, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, Timestamp, collection, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { logAuditEvent, AUDIT_ACTIONS } from './auditService';
 
 export interface KVKKConsent {
@@ -22,14 +21,13 @@ export interface DataPortabilityRequest {
   downloadUrl?: string;
 }
 
-// KVKK Rıza Yönetimi
 export const saveKVKKConsent = async (consent: KVKKConsent) => {
   try {
     await setDoc(doc(db, 'kvkk_consents', consent.userId), consent);
     
     await logAuditEvent({
       userId: consent.userId,
-      userRole: 'patient', // veya dinamik olarak belirlenebilir
+      userRole: 'patient',
       action: AUDIT_ACTIONS.CONSENT_GIVEN,
       resource: 'kvkk_consent',
       resourceId: consent.userId,
@@ -41,9 +39,7 @@ export const saveKVKKConsent = async (consent: KVKKConsent) => {
       severity: 'medium',
     });
     
-    console.log('✅ KVKK rızası kaydedildi');
   } catch (error) {
-    console.error('❌ KVKK rızası kaydetme hatası:', error);
     throw error;
   }
 };
@@ -58,12 +54,10 @@ export const getKVKKConsent = async (userId: string): Promise<KVKKConsent | null
     }
     return null;
   } catch (error) {
-    console.error('❌ KVKK rızası getirme hatası:', error);
     return null;
   }
 };
 
-// Veri Taşınabilirlik Hakkı
 export const requestDataPortability = async (userId: string) => {
   try {
     const request: DataPortabilityRequest = {
@@ -83,14 +77,11 @@ export const requestDataPortability = async (userId: string) => {
       severity: 'high',
     });
     
-    console.log('✅ Veri taşınabilirlik talebi oluşturuldu');
   } catch (error) {
-    console.error('❌ Veri taşınabilirlik talebi hatası:', error);
     throw error;
   }
 };
 
-// Unutulma Hakkı (Veri Silme)
 export const requestDataErasure = async (userId: string, reason: string) => {
   try {
     await logAuditEvent({
@@ -102,16 +93,33 @@ export const requestDataErasure = async (userId: string, reason: string) => {
       details: { reason },
       severity: 'critical',
     });
-    
-    // Burada gerçek silme işlemi yapılacak
-    console.log('✅ Veri silme talebi kaydedildi');
+
+    const batch = writeBatch(db);
+
+    const collectionsToDelete = ['patients', 'diet_plans', 'progress', 'questions', 'meal_photos', 'water_intake', 'questionnaires', 'push_tokens', 'smart_notifications'];
+    for (const col of collectionsToDelete) {
+      const snap = await getDocs(query(collection(db, col), where('userId', '==', userId)));
+      snap.docs.forEach(d => batch.delete(d.ref));
+    }
+
+    const patientSnap = await getDocs(query(collection(db, 'patients'), where('userId', '==', userId)));
+    for (const patientDoc of patientSnap.docs) {
+      const dietPlanSnap = await getDocs(query(collection(db, 'diet_plans'), where('patientId', '==', patientDoc.id)));
+      dietPlanSnap.docs.forEach(d => batch.delete(d.ref));
+    }
+
+    const chatSnap = await getDocs(query(collection(db, 'chat_rooms'), where('participants', 'array-contains', userId)));
+    chatSnap.docs.forEach(d => batch.delete(d.ref));
+
+    batch.delete(doc(db, 'kvkk_consents', userId));
+    batch.delete(doc(db, 'users', userId));
+
+    await batch.commit();
   } catch (error) {
-    console.error('❌ Veri silme talebi hatası:', error);
     throw error;
   }
 };
 
-// Düzeltme Hakkı
 export const requestDataRectification = async (userId: string, corrections: any) => {
   try {
     await logAuditEvent({
@@ -124,35 +132,28 @@ export const requestDataRectification = async (userId: string, corrections: any)
       severity: 'medium',
     });
 
-    console.log('✅ Veri düzeltme talebi kaydedildi');
   } catch (error) {
-    console.error('❌ Veri düzeltme talebi hatası:', error);
     throw error;
   }
 };
 
-// Mevcut tüm kullanıcılar için KVKK onayı oluştur (migration)
 export const migrateExistingUsersKVKK = async (): Promise<{ success: number; skipped: number; failed: number }> => {
   const results = { success: 0, skipped: 0, failed: 0 };
 
   try {
-    // Tüm kullanıcıları getir
     const usersSnapshot = await getDocs(collection(db, 'users'));
 
     for (const userDoc of usersSnapshot.docs) {
       const userId = userDoc.id;
 
       try {
-        // Zaten KVKK onayı var mı kontrol et
         const existingConsent = await getKVKKConsent(userId);
 
         if (existingConsent) {
-          console.log(`⏭️ Kullanıcı ${userId} zaten KVKK onayı vermiş, atlanıyor...`);
           results.skipped++;
           continue;
         }
 
-        // Yeni KVKK onayı oluştur
         const consent: KVKKConsent = {
           userId,
           dataProcessingConsent: true,
@@ -162,21 +163,16 @@ export const migrateExistingUsersKVKK = async (): Promise<{ success: number; ski
           consentVersion: '1.0',
         };
 
-        // Direkt kaydet (audit log olmadan - migration için)
         await setDoc(doc(db, 'kvkk_consents', userId), consent);
 
-        console.log(`✅ Kullanıcı ${userId} için KVKK onayı oluşturuldu`);
         results.success++;
       } catch (userError) {
-        console.error(`❌ Kullanıcı ${userId} için KVKK hatası:`, userError);
         results.failed++;
       }
     }
 
-    console.log(`📊 KVKK Migration tamamlandı: ${results.success} başarılı, ${results.skipped} atlandı, ${results.failed} başarısız`);
     return results;
   } catch (error) {
-    console.error('❌ KVKK migration hatası:', error);
     throw error;
   }
 };

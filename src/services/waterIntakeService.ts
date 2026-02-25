@@ -1,4 +1,3 @@
-// src/services/waterIntakeService.ts
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, doc, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { WaterIntake, WaterEntry, getTodayDateString } from '../models/WaterIntake';
 
@@ -6,9 +5,6 @@ const db = getFirestore();
 
 const COLLECTION_NAME = 'waterIntake';
 
-/**
- * Bugünkü su tüketim kaydını getir
- */
 export const getTodayWaterIntake = async (patientId: string): Promise<WaterIntake | null> => {
   try {
     const today = getTodayDateString();
@@ -34,18 +30,14 @@ export const getTodayWaterIntake = async (patientId: string): Promise<WaterIntak
       updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
     } as WaterIntake;
   } catch (error) {
-    console.error('Error getting today water intake:', error);
     throw error;
   }
 };
 
-/**
- * Su tüketimi ekle veya güncelle
- */
 export const addWaterIntake = async (
   patientId: string,
-  amount: number, // Eklenecek miktar (litre)
-  goal: number // Günlük hedef
+  amount: number,
+  goal: number
 ): Promise<WaterIntake> => {
   try {
     const today = getTodayDateString();
@@ -57,7 +49,6 @@ export const addWaterIntake = async (
     };
 
     if (existing && existing.id) {
-      // Güncelle
       const newAmount = existing.amount + amount;
       const updatedData = {
         amount: newAmount,
@@ -75,7 +66,6 @@ export const addWaterIntake = async (
         updatedAt: new Date(),
       } as WaterIntake;
     } else {
-      // Yeni kayıt oluştur
       const newIntake: Omit<WaterIntake, 'id'> = {
         patientId,
         date: today,
@@ -96,17 +86,13 @@ export const addWaterIntake = async (
       } as WaterIntake;
     }
   } catch (error) {
-    console.error('Error adding water intake:', error);
     throw error;
   }
 };
 
-/**
- * Su tüketimini azalt
- */
 export const removeWaterIntake = async (
   patientId: string,
-  amount: number, // Azaltılacak miktar (litre)
+  amount: number,
   goal: number
 ): Promise<WaterIntake | null> => {
   try {
@@ -133,18 +119,14 @@ export const removeWaterIntake = async (
       updatedAt: new Date(),
     } as WaterIntake;
   } catch (error) {
-    console.error('Error removing water intake:', error);
     throw error;
   }
 };
 
-/**
- * Belirli bir tarih aralığındaki su tüketim kayıtlarını getir
- */
 export const getWaterIntakeHistory = async (
   patientId: string,
-  startDate: string, // YYYY-MM-DD
-  endDate: string // YYYY-MM-DD
+  startDate: string,
+  endDate: string
 ): Promise<WaterIntake[]> => {
   try {
     const q = query(
@@ -167,14 +149,10 @@ export const getWaterIntakeHistory = async (
       } as WaterIntake;
     });
   } catch (error) {
-    console.error('Error getting water intake history:', error);
     throw error;
   }
 };
 
-/**
- * Hastanın su tüketim istatistiklerini getir (son 7 gün)
- */
 export const getWaterIntakeStats = async (patientId: string): Promise<{
   average: number;
   goalAchievedDays: number;
@@ -204,7 +182,6 @@ export const getWaterIntakeStats = async (patientId: string): Promise<{
       totalDays: history.length,
     };
   } catch (error) {
-    console.error('Error getting water intake stats:', error);
     throw error;
   }
 };

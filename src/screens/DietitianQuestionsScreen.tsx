@@ -1,4 +1,3 @@
-// src/screens/DietitianQuestionsScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -57,7 +56,6 @@ export default function DietitianQuestionsScreen({ route, navigation }: any) {
 
       setAllQuestions(questionsData);
     } catch (error: any) {
-      console.error('❌ Sorular yükleme hatası:', error);
     } finally {
       setLoading(false);
     }

@@ -54,19 +54,15 @@ export default function DietitianMealPhotosScreen({ route, navigation }: any) {
         await loadPhotos(user.id);
       }
     } catch (error) {
-      console.error('Error loading user:', error);
     }
   };
 
   const loadPhotos = async (dietitianId: string) => {
     try {
       setLoading(true);
-      console.log('📸 Loading photos for patient:', patientId, 'dietitian:', dietitianId);
       const photosList = await getDietitianPatientPhotos(dietitianId, patientId);
-      console.log('✅ Photos loaded:', photosList.length);
       setPhotos(photosList);
     } catch (error) {
-      console.error('❌ Error loading photos:', error);
       Alert.alert('Hata', 'Fotoğraflar yüklenirken hata oluştu');
     } finally {
       setLoading(false);

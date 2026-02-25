@@ -1,4 +1,3 @@
-// src/screens/PatientHomeScreenNew.tsx
 import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import {
   View,
@@ -30,7 +29,6 @@ import { Appointment } from '../models/Appointment';
 import MealPhotoUploadModal from '../components/MealPhotoUploadModal';
 import NotificationPanel from '../components/NotificationPanel';
 
-// Avatar presets
 const AVATAR_PRESETS = [
   { id: 'male1', icon: 'person', color: '#4CAF50' },
   { id: 'male2', icon: 'person', color: '#2196F3' },
@@ -96,8 +94,6 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
   useEffect(() => {
     // Auth state listener ekle
     const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
-      console.log('🔐 Auth state changed:', firebaseUser ? 'Logged in' : 'Logged out');
-      console.log('🔐 Firebase User:', firebaseUser?.uid, firebaseUser?.email);
       
       if (firebaseUser) {
         // Kullanıcı giriş yapmış, data yükle
@@ -129,16 +125,12 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      console.log('🔄 PatientHomeScreenNew - loadData başlıyor');
       
       const currentUser = await getCurrentUser();
-      console.log('👤 Current User:', currentUser);
       setUser(currentUser);
 
       if (currentUser) {
-        console.log('📋 Patient profili yükleniyor - User ID:', currentUser.id);
         const patientProfile = await getPatientProfileByUserId(currentUser.id);
-        console.log('📋 Patient Profile:', patientProfile);
         setPatient(patientProfile);
 
         if (patientProfile) {
@@ -182,7 +174,6 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
         }
       }
     } catch (error) {
-      console.error('Veri yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -211,7 +202,6 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
         setCurrentMeal(meal);
       }
     } catch (error) {
-      console.error('Hafif veri yükleme hatası:', error);
     }
   };
 
@@ -264,7 +254,6 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
       await addWaterIntake(user.id, 0.2, waterGoal);
       setWaterIntake(newAmount);
     } catch (error) {
-      console.error('Su ekleme hatası:', error);
     }
   };
 
@@ -276,7 +265,6 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
       await removeWaterIntake(user.id, 0.2, waterGoal);
       setWaterIntake(newAmount);
     } catch (error) {
-      console.error('Su azaltma hatası:', error);
     }
   };
 
@@ -456,13 +444,8 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
             <TouchableOpacity
               style={[styles.quickAccessCard, { backgroundColor: colors.cardBackground }]}
               onPress={() => {
-                console.log('📸 Öğün Fotoğrafı Gönder butonuna basıldı');
-                console.log('Patient ID:', patient?.id);
-                console.log('User ID:', user?.id);
-                console.log('Auth current user:', auth.currentUser?.uid);
                 
                 // Direkt PatientMealPhotoScreen'e git
-                console.log('✅ PatientMealPhoto ekranına gidiliyor');
                 navigation.navigate('PatientMealPhoto');
               }}
             >
@@ -735,12 +718,10 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
         <MealPhotoUploadModal
           visible={mealPhotoModalVisible}
           onClose={() => {
-            console.log('📸 Modal kapatılıyor');
             setMealPhotoModalVisible(false);
           }}
           patientId={patient?.id || user?.id || auth.currentUser?.uid || 'temp-id'}
           onUploadSuccess={() => {
-            console.log('📸 Fotoğraf yükleme başarılı');
             // Optionally refresh data after upload
             loadLightData();
           }}

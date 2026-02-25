@@ -1,4 +1,3 @@
-// src/contexts/ThemeContext.tsx
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appearance, ColorSchemeName } from 'react-native';
@@ -30,7 +29,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   // Listen to system theme changes
   useEffect(() => {
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-      console.log('System theme changed to:', colorScheme);
       if (themePreference === 'system') {
         updateThemeFromSystem(colorScheme);
       }
@@ -41,10 +39,8 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   // Update theme when preference changes
   useEffect(() => {
-    console.log('Theme preference changed to:', themePreference);
     if (themePreference === 'system') {
       const systemTheme = Appearance.getColorScheme();
-      console.log('Current system theme:', systemTheme);
       updateThemeFromSystem(systemTheme);
     } else {
       setTheme(themePreference);
@@ -53,26 +49,21 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   const updateThemeFromSystem = (colorScheme: ColorSchemeName) => {
     const newTheme = colorScheme === 'dark' ? 'dark' : 'light';
-    console.log('Updating theme from system:', colorScheme, '-> Setting theme to:', newTheme);
     setTheme(newTheme);
   };
 
   const loadThemePreference = async () => {
     try {
       const savedPreference = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-      console.log('Loaded saved preference:', savedPreference);
       if (savedPreference === 'dark' || savedPreference === 'light' || savedPreference === 'system') {
         setThemePreferenceState(savedPreference);
       } else {
         // İlk açılışta sistem temasını kullan
-        console.log('No saved preference, using system theme');
         setThemePreferenceState('system');
         const systemTheme = Appearance.getColorScheme();
-        console.log('Initial system theme:', systemTheme);
         updateThemeFromSystem(systemTheme);
       }
     } catch (error) {
-      console.error('Theme yükleme hatası:', error);
     }
   };
 
@@ -81,7 +72,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       setThemePreferenceState(preference);
       await AsyncStorage.setItem(THEME_STORAGE_KEY, preference);
     } catch (error) {
-      console.error('Theme kaydetme hatası:', error);
     }
   };
 
@@ -90,7 +80,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       const newTheme: ThemePreference = theme === 'light' ? 'dark' : 'light';
       await setThemePreference(newTheme);
     } catch (error) {
-      console.error('Theme değiştirme hatası:', error);
     }
   };
 

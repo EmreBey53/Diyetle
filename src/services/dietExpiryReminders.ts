@@ -1,4 +1,3 @@
-// src/services/dietExpiryReminders.ts
 import { db } from '../firebaseConfig';
 import { collection, query, where, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { DietPlan, isExpired } from '../models/DietPlan';
@@ -9,21 +8,14 @@ import {
   notifyPatientDietExpired,
 } from './notificationService';
 
-/**
- * Aktif diyetleri kontrol et ve süresi dolmuş olanları expire et
- * (Manually çağrılabilir veya app açıldığında)
- */
 export const checkAndExpireDiets = async () => {
   try {
-    console.log('🔄 Diyet expiry kontrol ediliyor...');
 
-    // Aktif diyetleri getir
     const snapshot = await getDocs(
       query(collection(db, 'dietPlans'), where('status', '==', 'active'))
     );
 
     if (snapshot.empty) {
-      console.log('ℹ️ Aktif diyet planı yok');
       return;
     }
 
@@ -37,7 +29,6 @@ export const checkAndExpireDiets = async () => {
         ? diet.expiryDate 
         : new Date(diet.expiryDate);
 
-      // Süresi dolmuş mı kontrol et
       if (now >= expiryDate && diet.status === 'active') {
         batch.update(docSnap.ref, {
           status: 'expired',
@@ -46,26 +37,19 @@ export const checkAndExpireDiets = async () => {
           updatedAt: new Date(),
         });
         expiredCount++;
-        console.log(`⏰ Expired: ${diet.title}`);
       }
     });
 
     if (expiredCount > 0) {
       await batch.commit();
-      console.log(`✅ ${expiredCount} diyet expire edildi`);
     }
 
     return expiredCount;
   } catch (error) {
-    console.error('❌ Diyet expiry kontrol hatası:', error);
     throw error;
   }
 };
 
-/**
- * Danışanın diyetlerinde süresi yaklaşan olanları bul
- * (2 gün kaldı olanları döndür)
- */
 export const getExpiringDiets = async (patientId: string): Promise<DietPlan[]> => {
   try {
     const snapshot = await getDocs(
@@ -93,7 +77,6 @@ export const getExpiringDiets = async (patientId: string): Promise<DietPlan[]> =
         (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      // 2 gün veya daha az kaldı mı?
       if (daysUntilExpiry >= 0 && daysUntilExpiry <= 2) {
         expiringDiets.push(diet);
       }
@@ -101,14 +84,10 @@ export const getExpiringDiets = async (patientId: string): Promise<DietPlan[]> =
 
     return expiringDiets;
   } catch (error) {
-    console.error('❌ Süresi yaklaşan diyetleri getirme hatası:', error);
     throw error;
   }
 };
 
-/**
- * Diyetisyenin danışanlarından süresi yaklaşan diyetleri bul
- */
 export const getDietitianExpiringDiets = async (
   dietitianId: string
 ): Promise<
@@ -150,7 +129,6 @@ export const getDietitianExpiringDiets = async (
         (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      // 2 gün veya daha az kaldı mı?
       if (daysUntilExpiry >= 0 && daysUntilExpiry <= 2) {
         expiringDiets.push({
           patientId: diet.patientId,
@@ -163,25 +141,18 @@ export const getDietitianExpiringDiets = async (
 
     return expiringDiets;
   } catch (error) {
-    console.error('❌ Diyetisyen süresi yaklaşan diyetleri getirme hatası:', error);
     throw error;
   }
 };
 
-/**
- * Süresi yaklaşan diyetler hakkında bildirimleri gönder
- * (Diyetisyen & Hasta)
- */
 export const sendExpiryReminders = async (patientId: string, pushToken: string) => {
   try {
     const expiringDiets = await getExpiringDiets(patientId);
 
     if (expiringDiets.length === 0) {
-      console.log('ℹ️ Süresi yaklaşan diyet yok');
       return;
     }
 
-    // Her diyet için bildirim gönder
     for (const diet of expiringDiets) {
       const expiryDate = diet.expiryDate instanceof Date 
         ? diet.expiryDate 
@@ -196,15 +167,10 @@ export const sendExpiryReminders = async (patientId: string, pushToken: string) 
       }
     }
 
-    console.log(`✅ ${expiringDiets.length} diyet hakkında bildirim gönderildi`);
   } catch (error) {
-    console.error('❌ Reminder gönderme hatası:', error);
   }
 };
 
-/**
- * Diyetisyene süresi yaklaşan danışanları hatırlat
- */
 export const notifyDietitianOfExpiringDiets = async (
   dietitianId: string,
   dietitianToken: string
@@ -213,11 +179,9 @@ export const notifyDietitianOfExpiringDiets = async (
     const expiringDiets = await getDietitianExpiringDiets(dietitianId);
 
     if (expiringDiets.length === 0) {
-      console.log('ℹ️ Süresi yaklaşan diyet yok');
       return;
     }
 
-    // Her diyet için bildirim gönder
     for (const item of expiringDiets) {
       await notifyDietitianAboutExpiringDiet(
         dietitianToken,
@@ -227,23 +191,14 @@ export const notifyDietitianOfExpiringDiets = async (
       );
     }
 
-    console.log(`✅ Diyetisyene ${expiringDiets.length} diyet hakkında bildirim gönderildi`);
   } catch (error) {
-    console.error('❌ Diyetisyen notification hatası:', error);
   }
 };
 
-/**
- * App başladığında çalıştırılabilecek kontrol
- * (Süresi dolmuş diyetleri expire et)
- */
 export const initializeDietExpiryCheck = async () => {
   try {
-    console.log('🔄 Diyet expiry sistem başlatılıyor...');
     await checkAndExpireDiets();
-    console.log('✅ Diyet expiry kontrol tamamlandı');
   } catch (error) {
-    console.error('❌ Diyet expiry initialization hatası:', error);
     // Error silently fail
   }
 };

@@ -1,4 +1,3 @@
-// src/services/pdfService.ts
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { DietPlan } from '../models/DietPlan';
@@ -12,7 +11,6 @@ import {
   ACTIVITY_LEVELS,
 } from '../models/Questionnaire';
 
-// Diyet Planı PDF
 export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
   try {
     const htmlContent = `
@@ -33,7 +31,6 @@ export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
           font-size: 12px;
         }
 
-        /* Üst Başlık - Kompakt */
         .header-container {
           display: flex;
           justify-content: space-between;
@@ -63,7 +60,6 @@ export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
           color: #666;
         }
 
-        /* Danışan Bilgileri Kartı - Kompakt */
         .patient-card {
           background: #f9fbe7;
           border-left: 4px solid #4CAF50;
@@ -90,7 +86,6 @@ export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
           font-weight: 600;
         }
 
-        /* Plan Başlığı */
         .plan-title {
           font-size: 14px;
           font-weight: bold;
@@ -100,7 +95,6 @@ export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
           border-bottom: 1px solid #e8e8e8;
         }
 
-        /* Diyet Listesi Tablosu - Kompakt */
         .diet-table {
           width: 100%;
           border-collapse: collapse;
@@ -140,7 +134,6 @@ export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
           font-weight: 600;
         }
 
-        /* Besin Listesi - Kompakt */
         .food-content-cell {
           padding: 8px 12px;
           vertical-align: top;
@@ -170,7 +163,6 @@ export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
           margin-left: 5px;
         }
 
-        /* Alt Bilgi - Kompakt */
         .footer {
           margin-top: 15px;
           padding: 8px 15px;
@@ -260,15 +252,11 @@ export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
     </html>
     `;
 
-    // PDF oluştur
     const { uri } = await Print.printToFileAsync({
       html: htmlContent,
       base64: false
     });
 
-    console.log('✅ PDF oluşturuldu:', uri);
-
-    // PDF'i paylaş
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(uri, {
         UTI: '.pdf',
@@ -279,12 +267,9 @@ export const generateDietPlanPDF = async (plan: DietPlan, patient: Patient) => {
 
     return uri;
   } catch (error: any) {
-    console.error('❌ PDF hatası:', error);
     throw new Error(error.message);
   }
 };
-
-// Helper functions to get labels from IDs
 const getGoalLabels = (ids: string[]) => {
   return ids.map(id => GOAL_OPTIONS.find(opt => opt.id === id)).filter(Boolean);
 };
@@ -305,7 +290,6 @@ const getActivityLevelLabel = (id: string) => {
   return ACTIVITY_LEVELS.find(opt => opt.id === id);
 };
 
-// Anamnez Formu PDF (Diyet Listesi ile)
 export const generateAnamnesisFormPDF = async (
   patient: Patient,
   progressList: Progress[],
@@ -347,10 +331,7 @@ export const generateAnamnesisFormPDF = async (
         th { background: #4CAF50; color: white; padding: 5px 8px; text-align: left; font-size: 11px; }
         td { padding: 5px 8px; border-bottom: 1px solid #eee; }
 
-        /* Sayfa Sonu */
         .page-break { page-break-before: always; margin: 0; padding: 0; }
-
-        /* Diyet Listesi Stilleri - Kompakt */
         .diet-section { margin-top: 10px; }
         .meal-card {
           background: #f8f9fa;
@@ -505,7 +486,6 @@ export const generateAnamnesisFormPDF = async (
       ` : ''}
 
       ${dietPlan ? `
-      <!-- SAYFA SONU - DİYET LİSTESİ YENİ SAYFADA BAŞLASIN -->
       <div class="page-break"></div>
 
       <div class="header">
@@ -549,15 +529,11 @@ export const generateAnamnesisFormPDF = async (
     </html>
     `;
 
-    // PDF oluştur
     const { uri } = await Print.printToFileAsync({
       html: htmlContent,
       base64: false
     });
 
-    console.log('✅ Diyet Listesi PDF oluşturuldu:', uri);
-
-    // PDF'i paylaş
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(uri, {
         UTI: '.pdf',
@@ -568,7 +544,6 @@ export const generateAnamnesisFormPDF = async (
 
     return uri;
   } catch (error: any) {
-    console.error('❌ Anamnez hatası:', error);
     throw new Error(error.message);
   }
 };

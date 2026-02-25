@@ -1,25 +1,16 @@
-// src/services/notificationSettingsService.ts
 import { db } from '../firebaseConfig';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 export interface NotificationSettings {
   userId: string;
-
-  // Genel Ayarlar
   allNotifications: boolean;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
-
-  // Danışan Bildirimleri
   newPatientNotification: boolean;
   patientWeightUpdateNotification: boolean;
   patientProgressNotification: boolean;
-
-  // Mesaj Bildirimleri
   newQuestionNotification: boolean;
   questionAnsweredNotification: boolean;
-
-  // Hatırlatma Bildirimleri
   dailyReminderNotification: boolean;
   appointmentReminderNotification: boolean;
   followUpReminderNotification: boolean;
@@ -39,9 +30,6 @@ const DEFAULT_SETTINGS: Omit<NotificationSettings, 'userId'> = {
   followUpReminderNotification: true,
 };
 
-/**
- * Kullanıcının bildirim ayarlarını getir
- */
 export async function getUserNotificationSettings(userId: string): Promise<NotificationSettings> {
   try {
     const settingsRef = doc(db, 'notificationSettings', userId);
@@ -50,7 +38,6 @@ export async function getUserNotificationSettings(userId: string): Promise<Notif
     if (settingsDoc.exists()) {
       return settingsDoc.data() as NotificationSettings;
     } else {
-      // Ayarlar yoksa varsayılan ayarları oluştur
       const defaultSettings: NotificationSettings = {
         userId,
         ...DEFAULT_SETTINGS,
@@ -59,14 +46,10 @@ export async function getUserNotificationSettings(userId: string): Promise<Notif
       return defaultSettings;
     }
   } catch (error) {
-    console.error('Error getting notification settings:', error);
     throw error;
   }
 }
 
-/**
- * Kullanıcının bildirim ayarlarını güncelle
- */
 export async function updateNotificationSettings(
   userId: string,
   settings: Partial<NotificationSettings>
@@ -75,14 +58,10 @@ export async function updateNotificationSettings(
     const settingsRef = doc(db, 'notificationSettings', userId);
     await updateDoc(settingsRef, settings);
   } catch (error) {
-    console.error('Error updating notification settings:', error);
     throw error;
   }
 }
 
-/**
- * Belirli bir bildirim türünün açık olup olmadığını kontrol et
- */
 export async function isNotificationEnabled(
   userId: string,
   notificationType: keyof Omit<NotificationSettings, 'userId'>
@@ -91,14 +70,10 @@ export async function isNotificationEnabled(
     const settings = await getUserNotificationSettings(userId);
     return settings.allNotifications && settings[notificationType];
   } catch (error) {
-    console.error('Error checking notification enabled:', error);
     return false;
   }
 }
 
-/**
- * Tüm bildirimleri aç/kapat
- */
 export async function toggleAllNotifications(userId: string, enabled: boolean): Promise<void> {
   try {
     const settingsRef = doc(db, 'notificationSettings', userId);
@@ -106,7 +81,6 @@ export async function toggleAllNotifications(userId: string, enabled: boolean): 
       allNotifications: enabled,
     };
 
-    // Eğer kapatılıyorsa tüm diğer ayarları da kapat
     if (!enabled) {
       Object.keys(DEFAULT_SETTINGS).forEach(key => {
         if (key !== 'allNotifications') {
@@ -117,7 +91,6 @@ export async function toggleAllNotifications(userId: string, enabled: boolean): 
 
     await updateDoc(settingsRef, updates);
   } catch (error) {
-    console.error('Error toggling all notifications:', error);
     throw error;
   }
 }

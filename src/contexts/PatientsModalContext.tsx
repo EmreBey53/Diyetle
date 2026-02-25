@@ -1,4 +1,3 @@
-// src/contexts/PatientsModalContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Patient } from '../models/Patient';
 import { getPatientsByDietitian } from '../services/patientService';
@@ -26,7 +25,6 @@ export const PatientsModalProvider: React.FC<{ children: React.ReactNode }> = ({
         setPatients(patientsData);
       }
     } catch (error) {
-      console.error('Error loading patients:', error);
     }
   };
 

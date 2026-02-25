@@ -1,4 +1,3 @@
-// src/screens/NotificationSettingsScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,

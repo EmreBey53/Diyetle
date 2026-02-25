@@ -1,4 +1,3 @@
-// src/screens/WelcomeScreen.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
@@ -14,8 +13,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import { autoLogin } from '../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth } from '../firebaseConfig';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -75,35 +76,31 @@ export default function WelcomeScreen({ navigation }: any) {
   useEffect(() => {
     const checkAutoLogin = async () => {
       try {
-        console.log('🔍 Kaydedilmiş giriş kontrol ediliyor...');
         
         // Onboarding'in gösterilip gösterilmediğini kontrol et
         const onboardingCompleted = await AsyncStorage.getItem('onboardingCompleted');
         
         if (onboardingCompleted === 'true') {
-          // Onboarding yapılmış, otomatik login kontrol et
-          const user = await autoLogin();
-
-          if (user) {
-            console.log('✅ Otomatik giriş yapıldı:', user.displayName);
-            if (user.role === 'dietitian') {
-              navigation.replace('DietitianHome');
-            } else {
-              navigation.replace('PatientHome');
+          const firebaseUser = auth.currentUser;
+          if (firebaseUser) {
+            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              if (userData.role === 'dietitian') {
+                navigation.replace('DietitianHome');
+              } else {
+                navigation.replace('PatientHome');
+              }
+              return;
             }
-          } else {
-            console.log('ℹ️ Kaydedilmiş giriş bulunamadı');
-            setShowOnboarding(false);
-            setLoading(false);
           }
+          setShowOnboarding(false);
+          setLoading(false);
         } else {
-          // Onboarding göster
-          console.log('ℹ️ Onboarding gösteriliyor');
           setShowOnboarding(true);
           setLoading(false);
         }
       } catch (error) {
-        console.error('❌ Kontrol hatası:', error);
         setShowOnboarding(true);
         setLoading(false);
       }
@@ -130,7 +127,6 @@ export default function WelcomeScreen({ navigation }: any) {
         await AsyncStorage.setItem('onboardingCompleted', 'true');
         setShowOnboarding(false);
       } catch (error) {
-        console.error('Error saving onboarding:', error);
       }
     }
   };
@@ -140,7 +136,6 @@ export default function WelcomeScreen({ navigation }: any) {
       await AsyncStorage.setItem('onboardingCompleted', 'true');
       setShowOnboarding(false);
     } catch (error) {
-      console.error('Error skipping onboarding:', error);
     }
   };
 

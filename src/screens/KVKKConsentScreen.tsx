@@ -1,4 +1,3 @@
-// src/screens/KVKKConsentScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -63,7 +62,6 @@ export default function KVKKConsentScreen({ navigation, route }: KVKKConsentScre
       });
     } catch (error: any) {
       Alert.alert('Hata', 'KVKK onayı kaydedilirken bir hata oluştu.');
-      console.error('KVKK kayıt hatası:', error);
     } finally {
       setLoading(false);
     }

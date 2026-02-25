@@ -1,4 +1,3 @@
-// src/models/WaterIntake.ts
 export interface WaterIntake {
   id?: string;
   patientId: string;

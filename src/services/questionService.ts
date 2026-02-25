@@ -1,4 +1,3 @@
-// src/services/questionService.ts
 import { db } from '../firebaseConfig';
 import {
   collection,
@@ -18,7 +17,6 @@ import { scheduleLocalNotification } from './notificationService';
 
 const QUESTIONS_COLLECTION = 'questions';
 
-// Soru oluştur (Danışan)
 export const createQuestion = async (
   questionData: Omit<Question, 'id' | 'createdAt' | 'updatedAt' | 'isAnswered'>
 ): Promise<string> => {
@@ -31,9 +29,7 @@ export const createQuestion = async (
     };
 
     const docRef = await addDoc(collection(db, QUESTIONS_COLLECTION), question);
-    console.log('✅ Soru oluşturuldu, ID:', docRef.id);
 
-    // Diyetisyene bildirim gönder
     try {
       const dietitianDoc = await getDoc(doc(db, 'users', questionData.dietitianId));
       if (dietitianDoc.exists()) {
@@ -54,24 +50,18 @@ export const createQuestion = async (
               patientName: questionData.patientName,
             }
           );
-          console.log('✅ Diyetisyene bildirim gönderildi');
         } else {
-          console.log('⚠️ Diyetisyenin push token\'ı bulunamadı');
         }
       }
     } catch (notifError) {
-      console.error('⚠️ Bildirim gönderme hatası (görmezden gelindi):', notifError);
-      // Bildirim hatası ana işlemi etkilemesin
     }
 
     return docRef.id;
   } catch (error: any) {
-    console.error('❌ Soru oluşturma hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Danışanın sorularını getir
 export const getQuestionsByPatient = async (patientId: string): Promise<Question[]> => {
   try {
     const q = query(
@@ -91,7 +81,6 @@ export const getQuestionsByPatient = async (patientId: string): Promise<Question
       } as Question;
     });
 
-    // Client-side sorting (en yeni önce)
     questions.sort((a, b) => {
       const dateA = typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : a.createdAt.getTime();
       const dateB = typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt.getTime();
@@ -100,12 +89,10 @@ export const getQuestionsByPatient = async (patientId: string): Promise<Question
 
     return questions;
   } catch (error: any) {
-    console.error('❌ Sorular yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Diyetisyenin sorularını getir
 export const getQuestionsByDietitian = async (dietitianId: string): Promise<Question[]> => {
   try {
     const q = query(
@@ -125,7 +112,6 @@ export const getQuestionsByDietitian = async (dietitianId: string): Promise<Ques
       } as Question;
     });
 
-    // Client-side sorting (cevapsızlar önce, sonra en yeni)
     questions.sort((a, b) => {
       if (a.isAnswered !== b.isAnswered) {
         return a.isAnswered ? 1 : -1;
@@ -137,17 +123,13 @@ export const getQuestionsByDietitian = async (dietitianId: string): Promise<Ques
 
     return questions;
   } catch (error: any) {
-    console.error('❌ Sorular yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Soruyu cevapla (Diyetisyen)
 export const answerQuestion = async (questionId: string, answer: string): Promise<void> => {
   try {
     const questionRef = doc(db, QUESTIONS_COLLECTION, questionId);
-
-    // Önce soru bilgilerini al
     const questionDoc = await getDoc(questionRef);
     if (!questionDoc.exists()) {
       throw new Error('Soru bulunamadı');
@@ -155,18 +137,14 @@ export const answerQuestion = async (questionId: string, answer: string): Promis
 
     const questionData = questionDoc.data() as Question;
 
-    // Cevabı kaydet
     await updateDoc(questionRef, {
       answer: answer,
       isAnswered: true,
       answeredAt: new Date(),
       updatedAt: new Date(),
     });
-    console.log('✅ Soru cevaplandı');
 
-    // Danışana bildirim gönder
     try {
-      // Danışan profilini bul (patients koleksiyonunda)
       const patientsQuery = query(
         collection(db, 'patients'),
         where('__name__', '==', questionData.patientId)
@@ -189,34 +167,25 @@ export const answerQuestion = async (questionId: string, answer: string): Promis
               answer: answer,
             }
           );
-          console.log('✅ Danışana bildirim gönderildi');
         } else {
-          console.log('⚠️ Danışanın push token\'ı bulunamadı');
         }
       }
     } catch (notifError) {
-      console.error('⚠️ Bildirim gönderme hatası (görmezden gelindi):', notifError);
-      // Bildirim hatası ana işlemi etkilemesin
     }
   } catch (error: any) {
-    console.error('❌ Cevap kaydetme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Soru sil
 export const deleteQuestion = async (questionId: string): Promise<void> => {
   try {
     const questionRef = doc(db, QUESTIONS_COLLECTION, questionId);
     await deleteDoc(questionRef);
-    console.log('✅ Soru silindi');
   } catch (error: any) {
-    console.error('❌ Soru silme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-// Soru detayını getir
 export const getQuestionById = async (questionId: string): Promise<Question | null> => {
   try {
     const docRef = doc(db, QUESTIONS_COLLECTION, questionId);
@@ -235,7 +204,6 @@ export const getQuestionById = async (questionId: string): Promise<Question | nu
       updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
     } as Question;
   } catch (error: any) {
-    console.error('❌ Soru getirme hatası:', error);
     throw new Error(error.message);
   }
 };

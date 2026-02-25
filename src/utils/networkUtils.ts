@@ -1,4 +1,3 @@
-// src/utils/networkUtils.ts
 import NetInfo from '@react-native-community/netinfo';
 
 export interface NetworkState {
@@ -17,7 +16,6 @@ export const checkNetworkStatus = async (): Promise<NetworkState> => {
       type: state.type || 'unknown',
     };
   } catch (error) {
-    console.error('Network status check failed:', error);
     return {
       isConnected: false,
       isInternetReachable: false,
@@ -62,12 +60,10 @@ export const retryWithBackoff = async <T>(
       return await operation();
     } catch (error: any) {
       lastError = error;
-      console.warn(`Attempt ${attempt}/${maxRetries} failed:`, error.message);
       
       // Son deneme değilse bekle
       if (attempt < maxRetries) {
         const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
-        console.log(`Waiting ${delay}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }

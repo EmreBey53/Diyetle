@@ -1,4 +1,3 @@
-// src/screens/PatientDetailScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -76,7 +75,6 @@ export default function PatientDetailScreen({ route, navigation }: any) {
       const dietPlansData = await getDietPlansByPatient(patient.id!);
       setDietPlans(dietPlansData);
     } catch (error: any) {
-      console.error('❌ Veri yükleme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -178,35 +176,22 @@ export default function PatientDetailScreen({ route, navigation }: any) {
 
   const handleDietExpiryChange = async () => {
   if (!selectedDiet) {
-    console.log('❌ selectedDiet null!');
     return;
   }
 
   try {
-    console.log('========== BAŞLADI ==========');
-    console.log('🔄 Diet ID:', selectedDiet.id);
-    console.log('📅 Seçilen Gün:', selectedDay, '(' + ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'][selectedDay] + ')');
-    console.log('⏰ Seçilen Saat:', selectedTime);
     
     setLoading(true);
     
-    console.log('🔄 updateDietExpiryDate() çağrılıyor...');
     await updateDietExpiryDate(selectedDiet.id!, selectedDay, selectedTime);
     
-    console.log('✅ updateDietExpiryDate() başarılı!');
     
     Alert.alert('✅ Başarılı!', `"${selectedDiet.title}" diyetinin süresi güncellendi!`);
     setShowExpiryModal(false);
     
-    console.log('🔄 Veriler yenileniyor...');
     await loadProgressData();
-    console.log('✅ Veriler yenilendi!');
     
-    console.log('========== BİTTİ ==========');
   } catch (error: any) {
-    console.error('❌ HATA:', error);
-    console.error('❌ HATA MESAJI:', error.message);
-    console.error('❌ HATA STACK:', error.stack);
     Alert.alert('❌ Hata', error.message);
   } finally {
     setLoading(false);

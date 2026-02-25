@@ -1,4 +1,3 @@
-// src/services/chatService.ts
 import { db } from '../firebaseConfig';
 import { collection, addDoc, query, where, orderBy, onSnapshot, Timestamp, updateDoc, doc, getDocs } from 'firebase/firestore';
 import { logAuditEvent, AUDIT_ACTIONS } from './auditService';
@@ -15,7 +14,7 @@ export interface ChatMessage {
   isRead: boolean;
   isEdited: boolean;
   editedAt?: Timestamp;
-  replyTo?: string; // Yanıtlanan mesaj ID'si
+  replyTo?: string;
   attachments?: ChatAttachment[];
 }
 
@@ -41,16 +40,12 @@ export interface ChatAttachment {
   mimeType: string;
 }
 
-// Chat odası oluşturma
 export const createChatRoom = async (patientId: string, dietitianId: string, patientName: string, dietitianName: string) => {
   try {
-    // Parametre kontrolü
     if (!patientId || !dietitianId || !patientName || !dietitianName) {
-      console.warn('⚠️ createChatRoom: Gerekli parametreler eksik');
       throw new Error('Gerekli parametreler eksik');
     }
 
-    // Mevcut chat odası var mı kontrol et
     const existingRoom = await getChatRoom(patientId, dietitianId);
     if (existingRoom) {
       return existingRoom.id;
@@ -78,20 +73,15 @@ export const createChatRoom = async (patientId: string, dietitianId: string, pat
       severity: 'low',
     });
 
-    console.log('✅ Chat odası oluşturuldu');
     return docRef.id;
   } catch (error) {
-    console.error('❌ Chat odası oluşturma hatası:', error);
     throw error;
   }
 };
 
-// Mesaj gönderme
 export const sendMessage = async (message: Omit<ChatMessage, 'id' | 'timestamp' | 'isRead' | 'isEdited'>) => {
   try {
-    // Parametre kontrolü
     if (!message.chatRoomId || !message.senderId || !message.message) {
-      console.warn('⚠️ sendMessage: Gerekli mesaj parametreleri eksik');
       throw new Error('Gerekli mesaj parametreleri eksik');
     }
 
@@ -104,13 +94,8 @@ export const sendMessage = async (message: Omit<ChatMessage, 'id' | 'timestamp' 
 
     const docRef = await addDoc(collection(db, 'chat_messages'), newMessage);
     
-    // Chat odası son mesaj bilgisini güncelle
     await updateChatRoomLastMessage(message.chatRoomId, message.message, newMessage.timestamp);
-    
-    // Okunmamış mesaj sayısını artır
     await incrementUnreadCount(message.chatRoomId, message.senderId);
-
-    // Chat odası bilgilerini al ve karşı tarafa bildirim gönder
     await sendChatNotificationToRecipient(message.chatRoomId, message.senderId, message.senderName, message.message);
 
     await logAuditEvent({
@@ -123,24 +108,18 @@ export const sendMessage = async (message: Omit<ChatMessage, 'id' | 'timestamp' 
       severity: 'low',
     });
 
-    console.log('✅ Mesaj gönderildi');
     return docRef.id;
   } catch (error) {
-    console.error('❌ Mesaj gönderme hatası:', error);
     throw error;
   }
 };
 
-// Mesajları dinleme (real-time)
 export const subscribeToMessages = (chatRoomId: string, callback: (messages: ChatMessage[]) => void) => {
-  // Parametre kontrolü
   if (!chatRoomId) {
-    console.warn('⚠️ subscribeToMessages: chatRoomId eksik');
     callback([]);
-    return () => {}; // Empty unsubscribe function
+    return () => {};
   }
 
-  // Index ile çalışan optimized query
   const q = query(
     collection(db, 'chat_messages'),
     where('chatRoomId', '==', chatRoomId),
@@ -154,8 +133,7 @@ export const subscribeToMessages = (chatRoomId: string, callback: (messages: Cha
     } as ChatMessage));
     callback(messages);
   }, (error) => {
-    console.error('❌ Chat mesajları dinleme hatası:', error);
-    // Fallback: Index yoksa basit query kullan
+    // Fallback query when Firestore composite index is not available
     const fallbackQ = query(
       collection(db, 'chat_messages'),
       where('chatRoomId', '==', chatRoomId)
@@ -177,18 +155,14 @@ export const subscribeToMessages = (chatRoomId: string, callback: (messages: Cha
   });
 };
 
-// Chat odalarını getirme
 export const getChatRooms = async (userId: string, userRole: 'patient' | 'dietitian') => {
   try {
-    // Parametre kontrolü
     if (!userId || !userRole) {
-      console.warn('⚠️ getChatRooms: userId veya userRole eksik');
       return [];
     }
 
     const field = userRole === 'patient' ? 'patientId' : 'dietitianId';
     
-    // Index ile optimized query
     const q = query(
       collection(db, 'chat_rooms'),
       where(field, '==', userId),
@@ -202,9 +176,7 @@ export const getChatRooms = async (userId: string, userRole: 'patient' | 'dietit
       ...doc.data()
     } as ChatRoom));
   } catch (error) {
-    console.error('❌ Chat odaları getirme hatası:', error);
-    
-    // Fallback: Index yoksa basit query
+    // Fallback query when Firestore composite index is not available
     try {
       const field = userRole === 'patient' ? 'patientId' : 'dietitianId';
       const fallbackQ = query(
@@ -228,22 +200,17 @@ export const getChatRooms = async (userId: string, userRole: 'patient' | 'dietit
 
       return rooms;
     } catch (fallbackError) {
-      console.error('❌ Fallback chat odaları getirme hatası:', fallbackError);
       return [];
     }
   }
 };
 
-// Mesajları okundu olarak işaretle
 export const markMessagesAsRead = async (chatRoomId: string, userId: string) => {
   try {
-    // Parametre kontrolü
     if (!chatRoomId || !userId) {
-      console.warn('⚠️ markMessagesAsRead: chatRoomId veya userId eksik');
       return;
     }
 
-    // Basit query - sadece chatRoomId ve isRead ile
     const q = query(
       collection(db, 'chat_messages'),
       where('chatRoomId', '==', chatRoomId),
@@ -252,8 +219,7 @@ export const markMessagesAsRead = async (chatRoomId: string, userId: string) => 
 
     const snapshot = await getDocs(q);
     
-    // Client-side filtering (senderId != userId)
-    const messagesToUpdate = snapshot.docs.filter(doc => 
+    const messagesToUpdate = snapshot.docs.filter(doc =>
       doc.data().senderId !== userId
     );
     
@@ -263,23 +229,15 @@ export const markMessagesAsRead = async (chatRoomId: string, userId: string) => 
       );
 
       await Promise.all(updatePromises);
-      console.log(`✅ ${messagesToUpdate.length} mesaj okundu olarak işaretlendi`);
     }
     
-    // Okunmamış sayısını sıfırla
     await resetUnreadCount(chatRoomId, userId);
-
   } catch (error) {
-    console.error('❌ Mesaj okundu işaretleme hatası:', error);
-    // Hata olsa bile devam et
   }
 };
 
-// Yardımcı fonksiyonlar
 const getChatRoom = async (patientId: string, dietitianId: string) => {
-  // Parametre kontrolü
   if (!patientId || !dietitianId) {
-    console.warn('⚠️ getChatRoom: patientId veya dietitianId eksik');
     return null;
   }
 
@@ -301,19 +259,13 @@ const updateChatRoomLastMessage = async (chatRoomId: string, message: string, ti
 };
 
 const incrementUnreadCount = async (chatRoomId: string, senderId: string) => {
-  // Bu fonksiyon karmaşık olduğu için basitleştirilmiş
-  console.log('Okunmamış mesaj sayısı artırıldı');
 };
 
 const resetUnreadCount = async (chatRoomId: string, userId: string) => {
-  // Bu fonksiyon karmaşık olduğu için basitleştirilmiş
-  console.log('Okunmamış mesaj sayısı sıfırlandı');
 };
 
-// Chat bildirimi gönderme
 const sendChatNotificationToRecipient = async (chatRoomId: string, senderId: string, senderName: string, message: string) => {
   try {
-    // Chat odası bilgilerini al
     const q = query(
       collection(db, 'chat_rooms'),
       where('__name__', '==', chatRoomId)
@@ -323,25 +275,15 @@ const sendChatNotificationToRecipient = async (chatRoomId: string, senderId: str
 
     if (!chatRoomDoc.empty) {
       const chatRoom = chatRoomDoc.docs[0].data() as ChatRoom;
-      
-      // Karşı tarafın ID'sini bul
       const recipientId = chatRoom.patientId === senderId ? chatRoom.dietitianId : chatRoom.patientId;
-      
+
       if (recipientId) {
-        console.log(`💬 Chat bildirimi gönderiliyor: ${senderName} -> ${recipientId}`);
-        
-        // Dinamik import ile circular dependency'yi önle
+        // Dynamic import to avoid circular dependency
         const { sendChatNotification } = await import('./smartNotificationService');
         await sendChatNotification(recipientId, senderName, message, chatRoomId);
         
-        console.log('✅ Chat bildirimi başarıyla gönderildi');
-      } else {
-        console.warn('⚠️ Alıcı ID bulunamadı');
       }
-    } else {
-      console.warn('⚠️ Chat odası bulunamadı:', chatRoomId);
     }
   } catch (error) {
-    console.error('❌ Chat bildirimi gönderme hatası:', error);
   }
 };

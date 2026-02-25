@@ -1,4 +1,3 @@
-// src/screens/SecuritySettingsScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -16,7 +15,6 @@ import { getCurrentUser } from '../services/authService';
 import { getKVKKConsent, requestDataPortability, requestDataErasure } from '../services/kvkkService';
 import { getAuditLogs } from '../services/auditService';
 
-// KVKK Rıza Metinleri
 const CONSENT_TEXTS = {
   dataProcessing: {
     title: 'Kişisel Verilerin İşlenmesine İlişkin Aydınlatma Metni',
@@ -155,7 +153,6 @@ export default function SecuritySettingsScreen({ navigation }: any) {
         setAuditLogs(logs.slice(0, 10)); // Son 10 log
       }
     } catch (error) {
-      console.error('❌ Kullanıcı verileri yükleme hatası:', error);
     }
   };
 
@@ -174,7 +171,6 @@ export default function SecuritySettingsScreen({ navigation }: any) {
                 Alert.alert('Başarılı', 'Veri indirme talebiniz alındı. E-posta adresinize indirme bağlantısı gönderilecek.');
               }
             } catch (error) {
-              console.error('❌ Veri taşınabilirlik hatası:', error);
               Alert.alert('Hata', 'Veri indirme talebi oluşturulurken bir hata oluştu.');
             }
           }
@@ -199,7 +195,6 @@ export default function SecuritySettingsScreen({ navigation }: any) {
                 Alert.alert('Başarılı', 'Hesap silme talebiniz alındı. 30 gün içinde hesabınız silinecek.');
               }
             } catch (error) {
-              console.error('❌ Hesap silme hatası:', error);
               Alert.alert('Hata', 'Hesap silme talebi oluşturulurken bir hata oluştu.');
             }
           }

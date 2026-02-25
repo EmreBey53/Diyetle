@@ -1,4 +1,3 @@
-// src/contexts/PatientDietModalContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getCurrentUser } from '../services/authService';
 import { getPatientProfileByUserId } from '../services/patientService';
@@ -22,7 +21,6 @@ export const PatientDietModalProvider: React.FC<{ children: React.ReactNode }> =
         await getPatientProfileByUserId(currentUser.id);
       }
     } catch (error) {
-      console.error('Error loading patient data:', error);
     }
   };
 

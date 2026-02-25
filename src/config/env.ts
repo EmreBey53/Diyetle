@@ -1,4 +1,3 @@
-// src/config/env.ts
 import Constants from 'expo-constants';
 
 interface EnvConfig {
@@ -12,9 +11,7 @@ interface EnvConfig {
   APP_ENV: string;
 }
 
-// Environment variables'ları güvenli bir şekilde al
 const getEnvVar = (key: string, fallback?: string): string => {
-  // Expo Constants'tan al
   const expoConfig = Constants.expoConfig as any;
   const manifest = Constants.manifest as any;
 
@@ -23,7 +20,6 @@ const getEnvVar = (key: string, fallback?: string): string => {
                 manifest?.extra?.[key];
 
   if (!value && !fallback) {
-    console.warn(`⚠️ Environment variable ${key} is not defined`);
   }
 
   return value || fallback || '';
@@ -40,11 +36,3 @@ export const ENV: EnvConfig = {
   APP_ENV: getEnvVar('APP_ENV', 'development'),
 };
 
-// Development modunda environment bilgilerini logla
-if (ENV.APP_ENV === 'development') {
-  console.log('🔧 Environment Config:', {
-    APP_ENV: ENV.APP_ENV,
-    FIREBASE_PROJECT_ID: ENV.FIREBASE_PROJECT_ID,
-    HAS_VISION_API_KEY: !!ENV.GOOGLE_VISION_API_KEY,
-  });
-}

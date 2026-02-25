@@ -1,4 +1,3 @@
-// src/screens/DietitianHomeScreen.tsx
 import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import {
   View,
@@ -22,7 +21,6 @@ import { registerForPushNotificationsAsync, saveUserToken, setupNotificationList
 import { getRecentActivities, Activity } from '../services/activityService';
 import NotificationPanel from '../components/NotificationPanel';
 
-// Chart data type
 interface ChartData {
   labels: string[];
   datasets: { data: number[] }[];
@@ -55,7 +53,6 @@ const QuickActionCard = ({ icon, title, subtitle, color, onPress, badge, textCol
   </TouchableOpacity>
 );
 
-// Avatar presets (same as ProfilePicker)
 const AVATAR_PRESETS = [
   { id: 'male1', icon: 'person', color: '#4CAF50' },
   { id: 'male2', icon: 'person', color: '#2196F3' },
@@ -184,7 +181,6 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
         });
       }
     } catch (error: any) {
-      console.error('Load data error:', error);
       // Don't show alert on initial load, just log
     } finally {
       setLoading(false);
@@ -205,7 +201,6 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
       setUnansweredCount(questions.filter((q: any) => !q.isAnswered).length);
       setUnreadNotificationCount(notifications.filter((n) => !n.read).length);
     } catch (error) {
-      console.error('Hafif veri yükleme hatası:', error);
     }
   };
 
@@ -231,7 +226,6 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
         datasets: [{ data: bmiTrend.data.length > 0 ? sanitizeData(bmiTrend.data) : [0] }],
       });
     } catch (error) {
-      console.error('Chart data yükleme hatası:', error);
     }
   };
 
@@ -257,7 +251,6 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
         }
         cleanup = setupNotificationListeners();
       } catch (error) {
-        console.error('Notification setup error:', error);
       }
     };
 

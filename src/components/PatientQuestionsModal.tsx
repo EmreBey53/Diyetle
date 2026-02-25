@@ -1,4 +1,3 @@
-// src/components/PatientQuestionsModal.tsx
 import React from 'react';
 import {
   View,

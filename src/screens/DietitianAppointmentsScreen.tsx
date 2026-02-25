@@ -42,7 +42,6 @@ export default function DietitianAppointmentsScreen({ navigation }: any) {
         subscribeToAppointments(user.id, setAppointments);
       }
     } catch (error) {
-      console.error('Error loading user:', error);
     }
   };
 
@@ -61,7 +60,6 @@ export default function DietitianAppointmentsScreen({ navigation }: any) {
       const apts = await getDietitianAppointments(dietitianId);
       setAppointments(apts);
     } catch (error) {
-      console.error('Error loading appointments:', error);
       Alert.alert('Hata', 'Randevular yüklenirken hata oluştu');
     } finally {
       setLoading(false);
@@ -93,7 +91,6 @@ export default function DietitianAppointmentsScreen({ navigation }: any) {
                 await loadAppointments(currentUser.id);
               }
             } catch (error) {
-              console.error('Error cancelling appointment:', error);
               Alert.alert('Hata', 'Randevu iptal edilirken hata oluştu');
             }
           },
@@ -112,7 +109,6 @@ export default function DietitianAppointmentsScreen({ navigation }: any) {
         title: `${appointment.patientName} - Randevu`,
       });
     } catch (error) {
-      console.error('Error sharing:', error);
     }
   };
 

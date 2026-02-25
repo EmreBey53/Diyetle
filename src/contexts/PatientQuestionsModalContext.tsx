@@ -1,4 +1,3 @@
-// src/contexts/PatientQuestionsModalContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Question } from '../models/Question';
 import { getQuestionsByPatient } from '../services/questionService';
@@ -27,7 +26,6 @@ export const PatientQuestionsModalProvider: React.FC<{ children: React.ReactNode
         setQuestions(questionsData);
       }
     } catch (error) {
-      console.error('Error loading questions:', error);
       // Hata durumunda boş liste göster
       setQuestions([]);
     }

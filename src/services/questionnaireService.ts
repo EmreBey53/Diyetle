@@ -1,4 +1,3 @@
-// src/services/questionnaireService.ts
 import { db } from '../firebaseConfig';
 import {
   collection,
@@ -17,14 +16,6 @@ import { notifyDietitianNewPatient } from './notificationService';
 const QUESTIONNAIRES_COLLECTION = 'questionnaires';
 const PATIENTS_COLLECTION = 'patients';
 
-/**
- * Save questionnaire and create patient record
- * @param questionnaireData - Questionnaire form data (without id, completedAt, updatedAt)
- * @param displayName - User's display name
- * @param email - User's email
- * @param phone - User's phone number
- * @returns patientId - Created patient's ID
- */
 export const saveQuestionnaire = async (
   questionnaireData: Omit<Questionnaire, 'id' | 'completedAt' | 'updatedAt'>,
   displayName?: string,
@@ -32,11 +23,9 @@ export const saveQuestionnaire = async (
   phone?: string
 ): Promise<string> => {
   try {
-    console.log('📋 Questionnaire kaydediliyor...');
 
     const now = Timestamp.now();
 
-    // 1. Prepare questionnaire data (Firebase doesn't accept undefined values)
     const questionnaireToSave: any = {
       userId: questionnaireData.userId,
       dietitianId: questionnaireData.dietitianId,
@@ -61,9 +50,7 @@ export const saveQuestionnaire = async (
       getDoc(doc(db, 'users', questionnaireData.dietitianId))
     ]);
 
-    console.log('✅ Questionnaire kaydedildi, ID:', questionnaireRef.id);
 
-    // 2. Create or update patient record
     const patientData: any = {
       userId: questionnaireData.userId,
       dietitianId: questionnaireData.dietitianId,
@@ -111,19 +98,13 @@ export const saveQuestionnaire = async (
         updatedAt: now.toDate(),
       });
 
-      console.log('✅ Existing patient updated, ID:', patientId);
     } else {
       // Create new patient
       const patientRef = await addDoc(collection(db, PATIENTS_COLLECTION), patientData);
       patientId = patientRef.id;
 
-      console.log('✅ New patient created, ID:', patientId);
 
-      // 3. Diyetisyene bildirim gönder (yeni hasta kaydoldu)
       try {
-        console.log('📤 Diyetisyene yeni hasta bildirimi gönderiliyor...');
-
-        // Dietitian info already fetched in parallel above
         if (dietitianDoc.exists()) {
           const dietitianData = dietitianDoc.data();
           const dietitianPushToken = dietitianData.pushToken;
@@ -134,29 +115,20 @@ export const saveQuestionnaire = async (
               displayName || 'Yeni Danışan',
               email || ''
             );
-            console.log('✅ Diyetisyene bildirim gönderildi');
           } else {
-            console.log('⚠️ Diyetisyenin push token\'ı yok, bildirim gönderilemedi');
           }
         } else {
-          console.log('⚠️ Diyetisyen bulunamadı');
         }
       } catch (notificationError) {
-        // Bildirim hatası critical değil, sadece log at
-        console.error('⚠️ Bildirim gönderme hatası (kritik değil):', notificationError);
       }
     }
 
     return patientId;
   } catch (error: any) {
-    console.error('❌ Questionnaire kaydetme hatası:', error);
     throw new Error(error.message || 'Questionnaire kaydedilemedi');
   }
 };
 
-/**
- * Get questionnaire by user ID
- */
 export const getQuestionnaireByUserId = async (userId: string): Promise<Questionnaire | null> => {
   try {
     const q = query(
@@ -182,14 +154,10 @@ export const getQuestionnaireByUserId = async (userId: string): Promise<Question
 
     return docs[0];
   } catch (error: any) {
-    console.error('❌ Questionnaire yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-/**
- * Update questionnaire
- */
 export const updateQuestionnaire = async (
   questionnaireId: string,
   updates: Partial<Omit<Questionnaire, 'id' | 'completedAt' | 'userId'>>
@@ -202,9 +170,7 @@ export const updateQuestionnaire = async (
       updatedAt: now,
     });
 
-    console.log('✅ Questionnaire güncellendi');
   } catch (error: any) {
-    console.error('❌ Questionnaire güncelleme hatası:', error);
     throw new Error(error.message);
   }
 };

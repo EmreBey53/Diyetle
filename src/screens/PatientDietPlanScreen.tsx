@@ -1,4 +1,3 @@
-// src/screens/PatientDietPlanScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -67,7 +66,6 @@ export default function PatientDietPlanScreen({ navigation }: any) {
       const expired = await getExpiredDietPlans(profile.id!);
       setExpiredDiets(expired);
     } catch (error: any) {
-      console.error('Diyet planları yükleme hatası:', error);
       Alert.alert('Hata', error.message);
     } finally {
       setLoading(false);
@@ -114,7 +112,6 @@ export default function PatientDietPlanScreen({ navigation }: any) {
 
                 Alert.alert('✅ Başarılı!', 'Diyet listeniz ve ilerleme raporunuz oluşturuldu!');
               } catch (error: any) {
-                console.error('PDF hatası:', error);
                 Alert.alert('❌ Hata', 'PDF oluşturulurken bir hata oluştu');
               }
             },

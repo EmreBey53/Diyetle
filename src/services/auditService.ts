@@ -1,4 +1,3 @@
-// src/services/auditService.ts
 import { db } from '../firebaseConfig';
 import { collection, addDoc, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
 
@@ -24,21 +23,16 @@ export const logAuditEvent = async (auditData: Omit<AuditLog, 'id' | 'timestamp'
     };
 
     await addDoc(collection(db, 'audit_logs'), auditLog);
-    console.log('🔍 Audit log kaydedildi:', auditData.action);
   } catch (error) {
-    console.error('❌ Audit log kaydetme hatası:', error);
   }
 };
 
 export const getAuditLogs = async (userId?: string, startDate?: Date, endDate?: Date) => {
   try {
-    // Parametre kontrolü
     if (userId && typeof userId !== 'string') {
-      console.warn('⚠️ getAuditLogs: Geçersiz userId');
       return [];
     }
 
-    // Index ile optimized query
     let q;
     if (userId) {
       q = query(
@@ -56,9 +50,7 @@ export const getAuditLogs = async (userId?: string, startDate?: Date, endDate?: 
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
   } catch (error) {
-    console.error('❌ Audit logs getirme hatası:', error);
-    
-    // Fallback: Index yoksa basit query
+    // Fallback query when Firestore composite index is not available
     try {
       let fallbackQ;
       if (userId) {
@@ -82,35 +74,26 @@ export const getAuditLogs = async (userId?: string, startDate?: Date, endDate?: 
 
       return logs;
     } catch (fallbackError) {
-      console.error('❌ Fallback audit logs hatası:', fallbackError);
       return [];
     }
   }
 };
 
-// KVKK Compliance Actions
 export const AUDIT_ACTIONS = {
-  // Veri İşleme
   DATA_ACCESS: 'data_access',
   DATA_CREATE: 'data_create',
   DATA_UPDATE: 'data_update',
   DATA_DELETE: 'data_delete',
   DATA_EXPORT: 'data_export',
-  
-  // Kimlik Doğrulama
   LOGIN_SUCCESS: 'login_success',
   LOGIN_FAILED: 'login_failed',
   LOGOUT: 'logout',
   PASSWORD_CHANGE: 'password_change',
-  
-  // KVKK Hakları
   CONSENT_GIVEN: 'consent_given',
   CONSENT_WITHDRAWN: 'consent_withdrawn',
   DATA_PORTABILITY: 'data_portability',
   DATA_RECTIFICATION: 'data_rectification',
   DATA_ERASURE: 'data_erasure',
-  
-  // Güvenlik
   UNAUTHORIZED_ACCESS: 'unauthorized_access',
   SUSPICIOUS_ACTIVITY: 'suspicious_activity',
   SECURITY_BREACH: 'security_breach',

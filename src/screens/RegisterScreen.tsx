@@ -1,4 +1,3 @@
-// src/screens/RegisterScreen.tsx - UPDATED VERSION
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
@@ -37,13 +36,9 @@ export default function RegisterScreen({ navigation }: any) {
   // Diyetisyenleri yükle
   const loadDietitians = useCallback(async () => {
     try {
-      console.log('📥 loadDietitians() çağrıldı');
       const data = await getAllDietitians();
-      console.log('📥 getAllDietitians() sonucu:', data);
       setDietitians(data);
-      console.log('✅ Diyetisyenler yüklendi:', data.length);
     } catch (error: any) {
-      console.error('❌ Diyetisyen yükleme hatası:', error);
     }
   }, []);
 
@@ -85,7 +80,6 @@ export default function RegisterScreen({ navigation }: any) {
         undefined  // height - Questionnaire'de sorulacak
       );
 
-      console.log('✅ Kullanıcı başarıyla oluşturuldu:', user);
 
       // EĞER PATIENT İSE: Önce KVKK onay ekranına yönlendir
       if (role === 'patient') {

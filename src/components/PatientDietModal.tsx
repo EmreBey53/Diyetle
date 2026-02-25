@@ -1,4 +1,3 @@
-// src/components/PatientDietModal.tsx
 import React from 'react';
 import {
   View,

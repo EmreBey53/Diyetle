@@ -1,4 +1,3 @@
-// src/screens/HelpSupportScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -149,7 +148,6 @@ export default function HelpSupportScreen({ navigation }: any) {
         setFaqItems(PATIENT_FAQ_ITEMS);
       }
     } catch (error) {
-      console.error('Error loading user:', error);
       // Hata durumunda varsayılan olarak hasta FAQ'lerini göster
       setFaqItems(PATIENT_FAQ_ITEMS);
     }

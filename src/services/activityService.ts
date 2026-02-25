@@ -1,4 +1,3 @@
-// src/services/activityService.ts
 import { db } from '../firebaseConfig';
 import {
   collection,
@@ -15,15 +14,12 @@ export interface Activity {
   timestamp: Date;
 }
 
-/**
- * Get recent activities for a dietitian
- */
 export const getRecentActivities = async (dietitianId: string): Promise<Activity[]> => {
   try {
     const activities: Activity[] = [];
     const now = new Date();
 
-    // 1. Fetch recent patients (without orderBy to avoid index requirement)
+    // Queries omit orderBy to avoid Firestore composite index requirement
     const patientsQuery = query(
       collection(db, 'patients'),
       where('dietitianId', '==', dietitianId)
@@ -42,7 +38,6 @@ export const getRecentActivities = async (dietitianId: string): Promise<Activity
       });
     });
 
-    // 2. Fetch recent diet plans (without orderBy to avoid index requirement)
     const plansQuery = query(
       collection(db, 'dietPlans'),
       where('dietitianId', '==', dietitianId)
@@ -53,7 +48,6 @@ export const getRecentActivities = async (dietitianId: string): Promise<Activity
       const planData = planDoc.data();
       const createdAt = planData.createdAt?.toDate ? planData.createdAt.toDate() : new Date(planData.createdAt);
 
-      // Get patient name
       let patientName = 'Danışan';
       if (planData.patientId) {
         const patientQuery = query(
@@ -75,7 +69,6 @@ export const getRecentActivities = async (dietitianId: string): Promise<Activity
       });
     }
 
-    // 3. Fetch recent answered questions (without orderBy to avoid index requirement)
     const questionsQuery = query(
       collection(db, 'questions'),
       where('dietitianId', '==', dietitianId),
@@ -87,7 +80,6 @@ export const getRecentActivities = async (dietitianId: string): Promise<Activity
       const questionData = questionDoc.data();
       const answeredAt = questionData.answeredAt?.toDate ? questionData.answeredAt.toDate() : new Date(questionData.answeredAt);
 
-      // Get patient name
       let patientName = 'Danışan';
       if (questionData.patientId) {
         const patientQuery = query(
@@ -109,19 +101,14 @@ export const getRecentActivities = async (dietitianId: string): Promise<Activity
       });
     }
 
-    // Sort all activities by timestamp (most recent first) and limit to 10
     activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     return activities.slice(0, 10);
 
   } catch (error: any) {
-    console.error('❌ Recent activities yükleme hatası:', error);
     throw new Error(error.message || 'Aktiviteler yüklenemedi');
   }
 };
 
-/**
- * Format timestamp as "X saat önce", "X gün önce", etc.
- */
 function formatTimeAgo(date: Date, now: Date): string {
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 

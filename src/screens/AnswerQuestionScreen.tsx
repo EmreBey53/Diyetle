@@ -1,4 +1,3 @@
-// src/screens/AnswerQuestionScreen.tsx
 import React, { useState } from 'react';
 import {
   View,

@@ -1,4 +1,3 @@
-// src/models/Questionnaire.ts
 export interface Questionnaire {
   id?: string;
   userId: string;

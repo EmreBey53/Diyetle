@@ -1,4 +1,3 @@
-// src/services/smartNotificationService.ts
 import { db } from '../firebaseConfig';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import * as Notifications from 'expo-notifications';
@@ -33,16 +32,14 @@ export interface NotificationPreferences {
   achievements: boolean;
   emergencyAlerts: boolean;
   chatMessages: boolean;
-  quietHoursStart: string; // "22:00"
-  quietHoursEnd: string; // "08:00"
+  quietHoursStart: string;
+  quietHoursEnd: string;
   preferredLanguage: 'tr' | 'en';
 }
 
-// Push token kaydetme
 export const registerForPushNotifications = async (userId: string) => {
   try {
     if (!Device.isDevice) {
-      console.log('📱 Fiziksel cihaz gerekli');
       return null;
     }
 
@@ -55,14 +52,11 @@ export const registerForPushNotifications = async (userId: string) => {
     }
     
     if (finalStatus !== 'granted') {
-      console.log('❌ Bildirim izni reddedildi');
       return null;
     }
 
     const token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log('✅ Push token alındı:', token);
 
-    // Token'ı Firebase'e kaydet
     await addDoc(collection(db, 'push_tokens'), {
       userId,
       token,
@@ -71,7 +65,6 @@ export const registerForPushNotifications = async (userId: string) => {
       isActive: true,
     });
 
-    // iOS için ek ayarlar
     if (Platform.OS === 'ios') {
       await Notifications.setNotificationCategoryAsync('chat', [
         {
@@ -89,12 +82,10 @@ export const registerForPushNotifications = async (userId: string) => {
 
     return token;
   } catch (error) {
-    console.error('❌ Push token kaydetme hatası:', error);
     return null;
   }
 };
 
-// Akıllı bildirim oluşturma
 export const createSmartNotification = async (notification: Omit<SmartNotification, 'id' | 'createdAt' | 'status'>) => {
   try {
     const newNotification: Omit<SmartNotification, 'id'> = {
@@ -105,7 +96,6 @@ export const createSmartNotification = async (notification: Omit<SmartNotificati
 
     const docRef = await addDoc(collection(db, 'smart_notifications'), newNotification);
     
-    // Expo notification'ı zamanla
     await scheduleExpoNotification(newNotification, docRef.id);
     
     await logAuditEvent({
@@ -118,15 +108,12 @@ export const createSmartNotification = async (notification: Omit<SmartNotificati
       severity: 'low',
     });
 
-    console.log('✅ Akıllı bildirim oluşturuldu:', notification.type);
     return docRef.id;
   } catch (error) {
-    console.error('❌ Akıllı bildirim oluşturma hatası:', error);
     throw error;
   }
 };
 
-// Chat mesajı bildirimi
 export const sendChatNotification = async (
   recipientId: string, 
   senderName: string, 
@@ -134,14 +121,6 @@ export const sendChatNotification = async (
   chatRoomId: string
 ) => {
   try {
-    console.log(`💬 Chat bildirimi hazırlanıyor:`, {
-      recipientId,
-      senderName,
-      messagePreview: message.substring(0, 30) + '...',
-      chatRoomId
-    });
-
-    // Veritabanına kaydet
     await createSmartNotification({
       userId: recipientId,
       type: 'chat_message',
@@ -154,9 +133,6 @@ export const sendChatNotification = async (
       personalizedData: { chatRoomId, senderId: senderName },
     });
 
-    console.log('✅ Chat bildirimi veritabanına kaydedildi');
-
-    // Anında bildirim gönder
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: `💬 ${senderName}`,
@@ -171,18 +147,13 @@ export const sendChatNotification = async (
         sound: 'default',
         badge: 1,
       },
-      trigger: null, // Anında gönder
+      trigger: null,
     });
-
-    console.log('✅ Push notification gönderildi, ID:', notificationId);
-    console.log('💬 Chat bildirimi başarıyla tamamlandı');
   } catch (error) {
-    console.error('❌ Chat bildirimi hatası:', error);
     throw error;
   }
 };
 
-// Randevu hatırlatıcısı
 export const sendAppointmentReminder = async (
   userId: string,
   appointmentTime: Date,
@@ -208,22 +179,16 @@ export const sendAppointmentReminder = async (
       personalizedData: { appointmentTime, doctorName, reminderType },
     });
 
-    console.log('📅 Randevu hatırlatıcısı gönderildi');
   } catch (error) {
-    console.error('❌ Randevu hatırlatıcısı hatası:', error);
   }
 };
 
-// Kişiselleştirilmiş öneriler
 export const createPersonalizedReminder = async (userId: string, userProfile: any) => {
   try {
-    // Parametre kontrolü
     if (!userId) {
-      console.warn('⚠️ createPersonalizedReminder: userId eksik');
       return;
     }
 
-    // userProfile kontrolü ve varsayılan değerler
     const safeProfile = {
       bmi: userProfile?.bmi || 25,
       age: userProfile?.age || 30,
@@ -253,13 +218,10 @@ export const createPersonalizedReminder = async (userId: string, userProfile: an
       });
     }
     
-    console.log('✅ Kişiselleştirilmiş hatırlatıcılar oluşturuldu');
   } catch (error) {
-    console.error('❌ Kişiselleştirilmiş hatırlatıcı hatası:', error);
   }
 };
 
-// Acil durum bildirimi
 export const sendEmergencyNotification = async (userId: string, message: string, severity: 'high' | 'critical') => {
   try {
     await createSmartNotification({
@@ -273,7 +235,6 @@ export const sendEmergencyNotification = async (userId: string, message: string,
       isPersonalized: false,
     });
 
-    // Anında gönder
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '🚨 Acil Durum',
@@ -282,7 +243,7 @@ export const sendEmergencyNotification = async (userId: string, message: string,
         sound: 'default',
         data: { type: 'emergency', severity },
       },
-      trigger: null, // Anında gönder
+      trigger: null,
     });
 
     await logAuditEvent({
@@ -294,13 +255,10 @@ export const sendEmergencyNotification = async (userId: string, message: string,
       severity: 'critical',
     });
 
-    console.log('🚨 Acil durum bildirimi gönderildi');
   } catch (error) {
-    console.error('❌ Acil durum bildirimi hatası:', error);
   }
 };
 
-// Expo notification zamanlama
 const scheduleExpoNotification = async (notification: Omit<SmartNotification, 'id'>, notificationId: string) => {
   try {
     const triggerDate = notification.scheduledTime.toDate();
@@ -319,7 +277,6 @@ const scheduleExpoNotification = async (notification: Omit<SmartNotification, 'i
       badge: 1,
     };
 
-    // iOS için kategori ayarla
     if (Platform.OS === 'ios' && notification.type === 'chat_message') {
       notificationContent.categoryIdentifier = 'chat';
     }
@@ -333,11 +290,9 @@ const scheduleExpoNotification = async (notification: Omit<SmartNotification, 'i
       } : null,
     });
   } catch (error) {
-    console.error('❌ Expo notification zamanlama hatası:', error);
   }
 };
 
-// Kişiselleştirilmiş öneriler oluşturma
 const generatePersonalizedRecommendations = (userProfile: any) => {
   const recommendations: Array<{
     type: 'meal_reminder' | 'water_reminder' | 'exercise_reminder' | 'appointment' | 'emergency' | 'achievement' | 'diet_expiry';
@@ -350,12 +305,10 @@ const generatePersonalizedRecommendations = (userProfile: any) => {
     data: any;
   }> = [];
   
-  // Güvenli değer kontrolü
   const bmi = userProfile?.bmi || 25;
   const age = userProfile?.age || 30;
   const weight = userProfile?.weight || 70;
-  
-  // BMI'ye göre öneriler
+
   if (bmi > 25) {
     recommendations.push({
       type: 'exercise_reminder',
@@ -368,8 +321,7 @@ const generatePersonalizedRecommendations = (userProfile: any) => {
       data: { targetBMI: 24, currentBMI: bmi },
     });
   }
-  
-  // Yaşa göre öneriler
+
   if (age > 50) {
     recommendations.push({
       type: 'water_reminder',
@@ -383,7 +335,6 @@ const generatePersonalizedRecommendations = (userProfile: any) => {
     });
   }
 
-  // Genel öneriler (her zaman ekle)
   recommendations.push({
     type: 'meal_reminder',
     title: '🍽️ Öğün Hatırlatması',

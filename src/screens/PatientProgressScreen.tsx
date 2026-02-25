@@ -1,4 +1,3 @@
-// src/screens/PatientProgressScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -68,7 +67,6 @@ export default function PatientProgressScreen({ navigation }: any) {
       const statsData = await getProgressStats(profile.id!);
       setStats(statsData);
     } catch (error: any) {
-      console.error('❌ İlerleme yükleme hatası:', error);
     } finally {
       setLoading(false);
     }

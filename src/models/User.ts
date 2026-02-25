@@ -1,4 +1,3 @@
-// src/models/User.ts
 export type UserRole = 'dietitian' | 'patient';
 
 export interface User {

@@ -1,4 +1,3 @@
-// src/screens/ChatSelectionScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -62,7 +61,6 @@ export default function ChatSelectionScreen({ navigation }: any) {
         setFilteredPatients(patientsList);
       }
     } catch (error) {
-      console.error('❌ Veri yükleme hatası:', error);
       Alert.alert('Hata', 'Danışan listesi yüklenirken hata oluştu');
     } finally {
       setLoading(false);
@@ -91,7 +89,6 @@ export default function ChatSelectionScreen({ navigation }: any) {
       });
 
     } catch (error) {
-      console.error('❌ Chat başlatma hatası:', error);
       Alert.alert('Hata', 'Mesajlaşma başlatılamadı');
     } finally {
       setStartingChat(null);

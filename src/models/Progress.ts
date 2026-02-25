@@ -1,4 +1,3 @@
-// src/models/Progress.ts
 export interface Progress {
   id?: string;
   patientId: string;

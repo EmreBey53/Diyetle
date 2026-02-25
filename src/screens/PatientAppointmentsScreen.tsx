@@ -38,7 +38,6 @@ export default function PatientAppointmentsScreen() {
         await loadAppointments(user.id);
       }
     } catch (error) {
-      console.error('Error loading user:', error);
       Alert.alert('Hata', 'Kullanıcı bilgisi yüklenirken hata oluştu');
     }
   };
@@ -49,7 +48,6 @@ export default function PatientAppointmentsScreen() {
       const apts = await getPatientAppointments(patientId);
       setAppointments(apts);
     } catch (error) {
-      console.error('Error loading appointments:', error);
       Alert.alert('Hata', 'Randevular yüklenirken hata oluştu');
     } finally {
       setLoading(false);
@@ -73,7 +71,6 @@ export default function PatientAppointmentsScreen() {
         Alert.alert('Linkini Kopyala', url);
       }
     } catch (error) {
-      console.error('Error opening link:', error);
       Alert.alert('Hata', 'Link açılırken hata oluştu');
     }
   };
@@ -85,7 +82,6 @@ export default function PatientAppointmentsScreen() {
         title: 'Randevu Detayları',
       });
     } catch (error) {
-      console.error('Error sharing:', error);
     }
   };
 

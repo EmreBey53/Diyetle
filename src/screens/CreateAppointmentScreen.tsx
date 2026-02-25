@@ -63,7 +63,6 @@ export default function CreateAppointmentScreen({ route, navigation }: any) {
         setSelectedPatient({ id: patientId, name: patientName });
       }
     } catch (error) {
-      console.error('Error loading user:', error);
     }
   };
 
@@ -81,7 +80,6 @@ export default function CreateAppointmentScreen({ route, navigation }: any) {
       const patientsList = await getDietitianPatients(dietitianId);
       setPatients(patientsList);
     } catch (error) {
-      console.error('Error loading patients:', error);
       Alert.alert('Hata', 'Hastalar yüklenirken hata oluştu');
     }
   };
@@ -182,7 +180,6 @@ export default function CreateAppointmentScreen({ route, navigation }: any) {
         },
       ]);
     } catch (error) {
-      console.error('Error creating appointment:', error);
       Alert.alert('Hata', 'Randevu oluşturulurken hata oluştu');
     } finally {
       setLoading(false);

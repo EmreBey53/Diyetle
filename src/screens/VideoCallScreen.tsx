@@ -1,4 +1,3 @@
-// src/screens/VideoCallScreen.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -60,14 +59,11 @@ export default function VideoCallScreen({ route, navigation }: any) {
         const actualCallId = callId || `test-call-${Date.now()}`;
         const callData = await startVideoCall(actualCallId, user.id, user.role);
         setIsConnected(true);
-        console.log('✅ Video görüşme başlatıldı:', callData.roomId);
       } else {
         // Test modu
         setIsConnected(true);
-        console.log('✅ Test video görüşmesi başlatıldı');
       }
     } catch (error) {
-      console.error('❌ Video görüşme başlatma hatası:', error);
       Alert.alert('Hata', 'Video görüşme başlatılamadı');
       navigation.goBack();
     }
@@ -88,19 +84,16 @@ export default function VideoCallScreen({ route, navigation }: any) {
   const toggleMute = () => {
     setIsMuted(!isMuted);
     // WebRTC mute/unmute logic burada olacak
-    console.log(isMuted ? '🔊 Mikrofon açıldı' : '🔇 Mikrofon kapatıldı');
   };
 
   const toggleVideo = () => {
     setIsVideoOff(!isVideoOff);
     // WebRTC video on/off logic burada olacak
-    console.log(isVideoOff ? '📹 Kamera açıldı' : '📹 Kamera kapatıldı');
   };
 
   const toggleSpeaker = () => {
     setIsSpeakerOn(!isSpeakerOn);
     // Audio output toggle logic burada olacak
-    console.log(isSpeakerOn ? '🔇 Hoparlör kapatıldı' : '🔊 Hoparlör açıldı');
   };
 
   const handleScreenShare = async () => {
@@ -109,10 +102,8 @@ export default function VideoCallScreen({ route, navigation }: any) {
         const actualCallId = callId || `test-call-${Date.now()}`;
         await startScreenShare(actualCallId, currentUser?.id || 'test-user');
         setIsScreenSharing(true);
-        console.log('🖥️ Ekran paylaşımı başlatıldı');
       } else {
         setIsScreenSharing(false);
-        console.log('🖥️ Ekran paylaşımı durduruldu');
       }
     } catch (error) {
       Alert.alert('Hata', 'Ekran paylaşımı başlatılamadı');
@@ -122,7 +113,6 @@ export default function VideoCallScreen({ route, navigation }: any) {
   const toggleRecording = () => {
     setIsRecording(!isRecording);
     // Recording logic burada olacak
-    console.log(isRecording ? '⏹️ Kayıt durduruldu' : '🔴 Kayıt başlatıldı');
   };
 
   const handleEndCall = async () => {
@@ -135,14 +125,11 @@ export default function VideoCallScreen({ route, navigation }: any) {
       // Eğer gerçek callId varsa sonlandır
       if (callId && currentUser) {
         await endVideoCall(callId, currentUser.id, callNotes);
-        console.log('✅ Video görüşme sonlandırıldı');
       } else {
-        console.log('✅ Test video görüşmesi sonlandırıldı');
       }
       
       navigation.goBack();
     } catch (error) {
-      console.error('❌ Görüşme sonlandırma hatası:', error);
       // Hata olsa bile geri git
       navigation.goBack();
     }

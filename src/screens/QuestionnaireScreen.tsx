@@ -1,4 +1,3 @@
-// src/screens/QuestionnaireScreen.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
@@ -144,7 +143,6 @@ export default function QuestionnaireScreen({
 
     setLoading(true);
     try {
-      console.log('📋 Questionnaire kaydediliyor...');
 
       const questionnaireData: Omit<QuestionnaireResponse, 'id' | 'completedAt' | 'updatedAt'> = {
         userId: user.id,
@@ -166,7 +164,6 @@ export default function QuestionnaireScreen({
         user.phone
       );
 
-      console.log('✅ Questionnaire kaydedildi, patientId:', patientId);
 
       Alert.alert('Başarılı!', 'Profil bilgileriniz kaydedildi. Dashboard\'a yönlendiriliyorsunuz...', [
         {
@@ -177,7 +174,6 @@ export default function QuestionnaireScreen({
         },
       ]);
     } catch (error: any) {
-      console.error('❌ Questionnaire kaydetme hatası:', error);
       Alert.alert('Hata', error.message || 'Profil kaydedilemedi. Lütfen tekrar deneyin.');
     } finally {
       setLoading(false);

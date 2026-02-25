@@ -1,4 +1,3 @@
-// src/firebaseConfig.ts
 import { initializeApp } from 'firebase/app';
 // @ts-ignore - React Native persistence is available in firebase/auth/react-native
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';

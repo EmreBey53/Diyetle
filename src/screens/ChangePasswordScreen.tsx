@@ -1,4 +1,3 @@
-// src/screens/ChangePasswordScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -69,7 +68,6 @@ export default function ChangePasswordScreen({ navigation }: any) {
         },
       ]);
     } catch (error: any) {
-      console.error('Şifre değiştirme hatası:', error);
       
       if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         Alert.alert('Hata', 'Mevcut şifreniz yanlış!');

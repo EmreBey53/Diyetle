@@ -1,4 +1,3 @@
-// src/screens/DietitianPlansListScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -65,7 +64,6 @@ export default function DietitianPlansListScreen({ navigation }: any) {
 
     setPlans(plansData);
   } catch (error: any) {
-    console.error('❌ Planlar yükleme hatası:', error);
   } finally {
     setLoading(false);
   }

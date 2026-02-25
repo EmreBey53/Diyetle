@@ -1,4 +1,3 @@
-// src/models/Notification.ts
 export interface Notification {
   id: string;
   userId: string; // Bildirimi alacak kullanıcı

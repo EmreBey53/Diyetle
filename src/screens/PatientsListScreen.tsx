@@ -1,4 +1,3 @@
-// src/screens/PatientsListScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -46,27 +45,22 @@ export default function PatientsListScreen({ navigation }: any) {
       return;
     }
 
-    console.log('🔄 [loadPatients] Başladı - dietitianId:', currentUser.id);
 
     // Tüm danışanları getir
     const allPatients = await getPatientsByDietitian(currentUser.id);
-    console.log('👥 [loadPatients] Tüm danışanlar:', allPatients.length);
 
     // Diyet bilgileriyle birlikte getir
     const patientsWithDietInfo = await getDietitianPatientsWithExpiryInfo(currentUser.id);
-    console.log('📊 [loadPatients] Diyet bilgili danışanlar:', patientsWithDietInfo);
 
     // Harita oluştur (patientId -> diyet bilgileri)
     const dietMap = new Map();
     patientsWithDietInfo.forEach((p) => {
-      console.log('➕ [loadPatients] Haritaya ekleniyor:', p.patientId, '- Diyet sayısı:', p.activeDiets?.length);
       dietMap.set(p.patientId, p);
     });
 
     // Danışanları diyet bilgileriyle zenginleştir
     const enrichedPatients = allPatients.map((patient) => {
       const dietInfo = dietMap.get(patient.id);
-      console.log('👤 [loadPatients]', patient.name, '- Diyet sayısı:', dietInfo?.activeDiets?.length || 0);
       return {
         ...patient,
         activeDiets: dietInfo?.activeDiets?.length || 0,
@@ -75,9 +69,7 @@ export default function PatientsListScreen({ navigation }: any) {
     });
 
     setPatients(enrichedPatients);
-    console.log('✅ [loadPatients] Tamamlandı');
   } catch (error: any) {
-    console.error('Danışanlar yükleme hatası:', error);
     Alert.alert('Hata', error.message);
   } finally {
     setLoading(false);

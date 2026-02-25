@@ -1,4 +1,3 @@
-// src/services/dashboardService.ts
 import { getPatientsByDietitian } from './patientService';
 import { Patient } from '../models/Patient';
 import { db } from '../firebaseConfig';
@@ -7,41 +6,29 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 export interface DashboardStats {
   totalPatients: number;
   averageBMI: number;
-  highBMICount: number; // BMI > 30
-  recentPatientsCount: number; // Son 7 gün
+  highBMICount: number;
+  recentPatientsCount: number;
   patients: Patient[];
 }
 
-// Cache mekanizması
 let cachedStats: { [dietitianId: string]: { data: DashboardStats; timestamp: number } } = {};
-const CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
+const CACHE_DURATION = 5 * 60 * 1000;
 
 export const getDashboardStats = async (dietitianId: string): Promise<DashboardStats> => {
   try {
-    // Cache kontrolü
     const cached = cachedStats[dietitianId];
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      console.log('📊 Cache\'den istatistikler yüklendi');
       return cached.data;
     }
 
-    console.log('📊 Dashboard istatistikleri yükleniyor...');
-    
+
     const patients = await getPatientsByDietitian(dietitianId);
-    
-    // Toplam danışan
     const totalPatients = patients.length;
-    
-    // Ortalama BMI (BMI olan danışanlar için)
     const patientsWithBMI = patients.filter(p => p.bmi);
     const averageBMI = patientsWithBMI.length > 0
       ? patientsWithBMI.reduce((sum, p) => sum + (p.bmi || 0), 0) / patientsWithBMI.length
       : 0;
-    
-    // Yüksek BMI sayısı (Obez - BMI > 30)
     const highBMICount = patients.filter(p => p.bmi && p.bmi > 30).length;
-    
-    // Son 7 gün içinde eklenenler
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     const recentPatientsCount = patients.filter(p => {
@@ -57,29 +44,17 @@ export const getDashboardStats = async (dietitianId: string): Promise<DashboardS
       patients,
     };
 
-    // Cache'e kaydet
     cachedStats[dietitianId] = {
       data: stats,
       timestamp: Date.now()
     };
 
-    console.log('✅ İstatistikler hazır:', {
-      totalPatients,
-      averageBMI: averageBMI.toFixed(1),
-      highBMICount,
-      recentPatientsCount
-    });
-
     return stats;
   } catch (error: any) {
-    console.error('❌ Dashboard yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
 
-/**
- * Get patient addition trend data for charts
- */
 export const getPatientAdditionTrend = async (
   dietitianId: string,
   period: 'weekly' | 'monthly'
@@ -88,7 +63,6 @@ export const getPatientAdditionTrend = async (
     const patients = await getPatientsByDietitian(dietitianId);
 
     if (period === 'weekly') {
-      // Last 7 days
       const labels = ['Pz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
       const data = new Array(7).fill(0);
       const today = new Date();
@@ -101,14 +75,13 @@ export const getPatientAdditionTrend = async (
         const daysDiff = Math.floor((today.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
 
         if (daysDiff >= 0 && daysDiff < 7) {
-          const dayIndex = 6 - daysDiff; // Most recent day is at the end
+          const dayIndex = 6 - daysDiff;
           data[dayIndex]++;
         }
       });
 
       return { labels, data };
     } else {
-      // Last 12 months
       const labels = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
       const data = new Array(12).fill(0);
       const currentMonth = new Date().getMonth();
@@ -121,7 +94,6 @@ export const getPatientAdditionTrend = async (
         const patientMonth = createdDate.getMonth();
         const patientYear = createdDate.getFullYear();
 
-        // Check if patient was added in the last 12 months
         const monthsDiff = (currentYear - patientYear) * 12 + (currentMonth - patientMonth);
 
         if (monthsDiff >= 0 && monthsDiff < 12) {
@@ -132,14 +104,10 @@ export const getPatientAdditionTrend = async (
       return { labels, data };
     }
   } catch (error: any) {
-    console.error('❌ Patient trend yükleme hatası:', error);
     return { labels: [], data: [] };
   }
 };
 
-/**
- * Get BMI trend data for charts
- */
 export const getBMITrend = async (
   dietitianId: string,
   period: 'weekly' | 'monthly'
@@ -153,7 +121,6 @@ export const getBMITrend = async (
     const progressSnapshot = await getDocs(progressQuery);
 
     if (period === 'weekly') {
-      // Last 7 days - calculate average BMI per day
       const labels = ['Pz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
       const bmiSums = new Array(7).fill(0);
       const bmiCounts = new Array(7).fill(0);
@@ -172,14 +139,12 @@ export const getBMITrend = async (
         }
       });
 
-      // Calculate averages
       const data = bmiSums.map((sum, index) =>
         bmiCounts[index] > 0 ? parseFloat((sum / bmiCounts[index]).toFixed(1)) : 0
       );
 
       return { labels, data };
     } else {
-      // Last 12 months - calculate average BMI per month
       const labels = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
       const bmiSums = new Array(12).fill(0);
       const bmiCounts = new Array(12).fill(0);
@@ -200,7 +165,6 @@ export const getBMITrend = async (
         }
       });
 
-      // Calculate averages
       const data = bmiSums.map((sum, index) =>
         bmiCounts[index] > 0 ? parseFloat((sum / bmiCounts[index]).toFixed(1)) : 0
       );
@@ -208,7 +172,6 @@ export const getBMITrend = async (
       return { labels, data };
     }
   } catch (error: any) {
-    console.error('❌ BMI trend yükleme hatası:', error);
     return { labels: [], data: [] };
   }
 };

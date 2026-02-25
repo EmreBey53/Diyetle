@@ -1,4 +1,3 @@
-// src/screens/LoginScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -11,15 +10,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { loginUser, saveCredentials } from '../services/authService';
+import { loginUser } from '../services/authService';
 import { colors } from '../constants/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -31,18 +28,11 @@ export default function LoginScreen({ navigation }: any) {
     setLoading(true);
     try {
       const user = await loginUser(email, password);
-      
-      // Kullanıcı bilgilerini AsyncStorage'a kaydet
-      await AsyncStorage.setItem('user', JSON.stringify(user));
 
-      // Beni Hatırla seçiliyse credential'ları kaydet
-      if (rememberMe) {
-        await saveCredentials(email, password, true);
-      }
+      await AsyncStorage.setItem('user', JSON.stringify(user));
 
       Alert.alert('Başarılı!', `Hoş geldin ${user.displayName}! 🎉`);
 
-      // Role göre yönlendir
       if (user.role === 'dietitian') {
         navigation.replace('DietitianHome');
       } else {
@@ -85,19 +75,6 @@ export default function LoginScreen({ navigation }: any) {
           secureTextEntry
           autoCapitalize="none"
         />
-
-        {/* Beni Hatırla Custom Checkbox */}
-        <TouchableOpacity 
-          style={styles.rememberMeContainer}
-          onPress={() => setRememberMe(!rememberMe)}
-        >
-          <Ionicons
-            name={rememberMe ? 'checkbox' : 'checkbox-outline'}
-            size={24}
-            color={rememberMe ? colors.primary : colors.textLight}
-          />
-          <Text style={styles.rememberMeText}>Beni Hatırla</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.loginButton, loading && styles.buttonDisabled]}
@@ -167,17 +144,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  rememberMeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    padding: 10,
-  },
-  rememberMeText: {
-    marginLeft: 12,
-    fontSize: 16,
-    color: colors.text,
   },
   loginButton: {
     backgroundColor: colors.primary,

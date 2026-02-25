@@ -1,4 +1,3 @@
-// src/screens/VideoCallSelectionScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -62,7 +61,6 @@ export default function VideoCallSelectionScreen({ navigation }: any) {
         setFilteredPatients(patientsList);
       }
     } catch (error) {
-      console.error('❌ Veri yükleme hatası:', error);
       Alert.alert('Hata', 'Danışan listesi yüklenirken hata oluştu');
     } finally {
       setLoading(false);
@@ -105,7 +103,6 @@ export default function VideoCallSelectionScreen({ navigation }: any) {
               });
 
             } catch (error) {
-              console.error('❌ Video görüşme başlatma hatası:', error);
               Alert.alert('Hata', 'Video görüşme başlatılamadı');
             } finally {
               setCalling(null);

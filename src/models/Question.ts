@@ -1,4 +1,3 @@
-// src/models/Question.ts
 export interface Question {
   id?: string;
   patientId: string;

@@ -1,4 +1,3 @@
-// src/screens/DietPlanDetailScreen.tsx
 import React from 'react';
 import {
   View,
@@ -35,7 +34,6 @@ export default function DietPlanDetailScreen({ route, navigation }: any) {
       await generateDietPlanPDF(plan, patient);
       Alert.alert('Başarılı!', 'Diyet listesi PDF olarak paylaşıldı');
     } catch (error: any) {
-      console.error('PDF paylaşım hatası:', error);
       Alert.alert('Hata', 'PDF oluşturulurken bir hata oluştu');
     }
   };

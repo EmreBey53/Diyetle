@@ -1,4 +1,3 @@
-// src/models/Patient.ts
 export interface Patient {
   id?: string; // Firestore document ID
   userId: string; // Auth user ID (danışanın kendi user ID'si)

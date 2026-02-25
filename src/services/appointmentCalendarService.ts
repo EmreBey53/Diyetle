@@ -1,4 +1,3 @@
-// src/services/appointmentCalendarService.ts
 import { db } from '../firebaseConfig';
 import { collection, addDoc, updateDoc, doc, getDoc, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { createVideoCall } from './videoCallService';
@@ -56,7 +55,6 @@ export interface AppointmentReminder {
   message: string;
 }
 
-// Müsait zaman slotları oluşturma
 export const createAvailabilitySlots = async (
   dietitianId: string,
   slots: Omit<AppointmentSlot, 'id' | 'dietitianId' | 'createdAt'>[]
@@ -84,15 +82,12 @@ export const createAvailabilitySlots = async (
       severity: 'low',
     });
 
-    console.log('✅ Müsaitlik slotları oluşturuldu:', createdSlots.length);
     return createdSlots;
   } catch (error) {
-    console.error('❌ Slot oluşturma hatası:', error);
     throw error;
   }
 };
 
-// Randevu rezervasyonu
 export const bookAppointment = async (
   slotId: string,
   patientId: string,
@@ -101,7 +96,6 @@ export const bookAppointment = async (
   preparationNotes?: string
 ) => {
   try {
-    // Slot bilgilerini al
     const slotDoc = await getDoc(doc(db, 'appointment_slots', slotId));
     if (!slotDoc.exists()) {
       throw new Error('Randevu slotu bulunamadı');
@@ -112,14 +106,13 @@ export const bookAppointment = async (
       throw new Error('Bu slot artık müsait değil');
     }
 
-    // Randevu oluştur
     const appointmentDate = new Date(`${slotData.date}T${slotData.startTime}:00`);
     
     const appointment: Omit<VideoAppointment, 'id'> = {
       slotId,
       dietitianId: slotData.dietitianId,
       patientId,
-      dietitianName: '', // Diyetisyen adı ayrıca çekilecek
+      dietitianName: '',
       patientName,
       appointmentDate: Timestamp.fromDate(appointmentDate),
       duration: slotData.maxDuration,
@@ -136,29 +129,25 @@ export const bookAppointment = async (
 
     const docRef = await addDoc(collection(db, 'video_appointments'), appointment);
     
-    // Slot'u dolu olarak işaretle
     await updateDoc(doc(db, 'appointment_slots', slotId), {
       isAvailable: false,
     });
 
-    // Video call oluştur
     const videoCall = await createVideoCall(
       docRef.id,
       slotData.dietitianId,
       patientId,
-      '', // Diyetisyen adı
+      '',
       patientName,
       appointmentDate,
       slotData.maxDuration
     );
 
-    // Randevuya video call ID'sini ekle
     await updateDoc(doc(db, 'video_appointments', docRef.id), {
       videoCallId: videoCall.id,
       meetingLink: `diyetle://video-call/${videoCall.roomId}`,
     });
 
-    // Hatırlatıcıları planla
     await scheduleAppointmentReminders(docRef.id, appointmentDate, [slotData.dietitianId, patientId]);
 
     await logAuditEvent({
@@ -171,15 +160,12 @@ export const bookAppointment = async (
       severity: 'low',
     });
 
-    console.log('✅ Randevu rezerve edildi:', docRef.id);
     return { id: docRef.id, videoCallId: videoCall.id, ...appointment };
   } catch (error) {
-    console.error('❌ Randevu rezervasyon hatası:', error);
     throw error;
   }
 };
 
-// Randevu onaylama (diyetisyen tarafından)
 export const confirmAppointment = async (appointmentId: string, dietitianId: string) => {
   try {
     const appointmentRef = doc(db, 'video_appointments', appointmentId);
@@ -199,7 +185,6 @@ export const confirmAppointment = async (appointmentId: string, dietitianId: str
       confirmedAt: Timestamp.now(),
     });
 
-    // Danışana onay bildirimi gönder
     await sendEmergencyNotification(
       appointmentData.patientId,
       `✅ Randevunuz onaylandı! ${appointmentData.appointmentDate.toDate().toLocaleString('tr-TR')}`,
@@ -215,15 +200,12 @@ export const confirmAppointment = async (appointmentId: string, dietitianId: str
       severity: 'low',
     });
 
-    console.log('✅ Randevu onaylandı:', appointmentId);
     return true;
   } catch (error) {
-    console.error('❌ Randevu onaylama hatası:', error);
     throw error;
   }
 };
 
-// Randevu iptali
 export const cancelAppointment = async (
   appointmentId: string, 
   userId: string, 
@@ -240,17 +222,15 @@ export const cancelAppointment = async (
 
     const appointmentData = appointmentDoc.data() as VideoAppointment;
     
-    // İptal yetkisi kontrolü
     if (appointmentData.dietitianId !== userId && appointmentData.patientId !== userId) {
       throw new Error('Bu randevuyu iptal etme yetkiniz yok');
     }
 
-    // İptal zamanı kontrolü (24 saat öncesinden iptal edilebilir)
+    // Cancellation policy: cannot cancel less than 24 hours before appointment
     const appointmentTime = appointmentData.appointmentDate.toDate();
     const hoursUntilAppointment = (appointmentTime.getTime() - Date.now()) / (1000 * 60 * 60);
     
     if (hoursUntilAppointment < 24) {
-      console.warn('⚠️ 24 saatten az kala iptal');
     }
 
     await updateDoc(appointmentRef, {
@@ -260,13 +240,11 @@ export const cancelAppointment = async (
       refundRequested,
     });
 
-    // Slot'u tekrar müsait yap
     await updateDoc(doc(db, 'appointment_slots', appointmentData.slotId), {
       isAvailable: true,
     });
 
-    // Karşı tarafa bildirim gönder
-    const otherUserId = userId === appointmentData.dietitianId 
+    const otherUserId = userId === appointmentData.dietitianId
       ? appointmentData.patientId 
       : appointmentData.dietitianId;
     
@@ -286,31 +264,21 @@ export const cancelAppointment = async (
       severity: 'medium',
     });
 
-    console.log('✅ Randevu iptal edildi:', appointmentId);
     return true;
   } catch (error) {
-    console.error('❌ Randevu iptal hatası:', error);
     throw error;
   }
 };
 
-// Müsait slotları getirme
 export const getAvailableSlots = async (dietitianId: string, startDate: Date, endDate: Date) => {
   try {
-    // Parametre kontrolü
     if (!dietitianId || !startDate || !endDate) {
-      console.warn('⚠️ getAvailableSlots: Gerekli parametreler eksik', {
-        dietitianId: !!dietitianId,
-        startDate: !!startDate,
-        endDate: !!endDate
-      });
       return [];
     }
 
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
     
-    // Index ile optimized query
     const q = query(
       collection(db, 'appointment_slots'),
       where('dietitianId', '==', dietitianId),
@@ -327,12 +295,9 @@ export const getAvailableSlots = async (dietitianId: string, startDate: Date, en
       ...doc.data()
     } as AppointmentSlot));
   } catch (error) {
-    console.error('❌ Müsait slot getirme hatası:', error);
-    
-    // Fallback: Index yoksa basit query
+    // Fallback query when Firestore composite index is not available
     try {
       if (!dietitianId) {
-        console.warn('⚠️ Fallback: dietitianId eksik');
         return [];
       }
 
@@ -362,24 +327,19 @@ export const getAvailableSlots = async (dietitianId: string, startDate: Date, en
 
       return slots;
     } catch (fallbackError) {
-      console.error('❌ Fallback müsait slot hatası:', fallbackError);
       return [];
     }
   }
 };
 
-// Randevu geçmişi
 export const getAppointmentHistory = async (userId: string, userRole: 'dietitian' | 'patient') => {
   try {
-    // Parametreleri kontrol et
     if (!userId || !userRole) {
-      console.warn('⚠️ getAppointmentHistory: userId veya userRole eksik');
       return [];
     }
 
     const field = userRole === 'dietitian' ? 'dietitianId' : 'patientId';
     
-    // Index ile optimized query
     const q = query(
       collection(db, 'video_appointments'),
       where(field, '==', userId),
@@ -392,9 +352,7 @@ export const getAppointmentHistory = async (userId: string, userRole: 'dietitian
       ...doc.data()
     } as VideoAppointment));
   } catch (error) {
-    console.error('❌ Randevu geçmişi getirme hatası:', error);
-    
-    // Fallback: Index yoksa basit query
+    // Fallback query when Firestore composite index is not available
     try {
       const field = userRole === 'dietitian' ? 'dietitianId' : 'patientId';
       const fallbackQ = query(
@@ -417,13 +375,11 @@ export const getAppointmentHistory = async (userId: string, userRole: 'dietitian
 
       return appointments;
     } catch (fallbackError) {
-      console.error('❌ Fallback randevu geçmişi hatası:', fallbackError);
       return [];
     }
   }
 };
 
-// Hatırlatıcı planlama
 const scheduleAppointmentReminders = async (
   appointmentId: string, 
   appointmentDate: Date, 
@@ -455,8 +411,6 @@ const scheduleAppointmentReminders = async (
       }
     }
 
-    console.log('✅ Hatırlatıcılar planlandı:', appointmentId);
   } catch (error) {
-    console.error('❌ Hatırlatıcı planlama hatası:', error);
   }
 };

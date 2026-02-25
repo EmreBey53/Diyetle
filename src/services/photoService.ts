@@ -29,24 +29,18 @@ const STORAGE_PATH = 'meal-photos';
 // PERMISSION FUNCTIONS
 export const requestCameraPermission = async (): Promise<boolean> => {
   try {
-    console.log('🔐 Kamera izni isteniyor...');
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    console.log('🔐 Kamera izin durumu:', status);
     return status === 'granted';
   } catch (error) {
-    console.error('❌ Camera permission hatası:', error);
     return false;
   }
 };
 
 export const requestGalleryPermission = async (): Promise<boolean> => {
   try {
-    console.log('🔐 Galeri izni isteniyor...');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    console.log('🔐 Galeri izin durumu:', status);
     return status === 'granted';
   } catch (error) {
-    console.error('❌ Gallery permission hatası:', error);
     return false;
   }
 };
@@ -56,12 +50,10 @@ export const analyzeFoodImage = async (
   base64Image: string
 ): Promise<FoodDetectionResult> => {
   try {
-    console.log('🔍 Resim Google Vision API ile analiz ediliyor...');
 
     // Network durumunu kontrol et
     const networkState = await checkNetworkStatus();
     if (!networkState.isConnected) {
-      console.warn('⚠️ Network bağlantısı yok, offline fallback kullanılıyor');
       return {
         success: false,
         message: 'İnternet bağlantısı yok. Fotoğraf yine de gönderilebilir.',
@@ -80,7 +72,6 @@ export const analyzeFoodImage = async (
 
     // Retry mekanizması ile API çağrısı
     const result = await retryWithBackoff(async () => {
-      console.log('🔄 Vision API çağrısı yapılıyor...');
 
       const response = await fetch(
         `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
@@ -124,7 +115,6 @@ export const analyzeFoodImage = async (
 
     const labels = result.responses[0]?.labelAnnotations || [];
 
-    console.log('📋 Detected Labels:', labels.map((l: any) => l.description));
 
     const foodKeywords = [
       'food',
@@ -172,9 +162,6 @@ export const analyzeFoodImage = async (
 
     const isFood = foodConfidence > 30;
 
-    console.log('✅ Food Detection Sonuç:');
-    console.log('   - Is Food:', isFood);
-    console.log('   - Confidence:', foodConfidence.toFixed(2) + '%');
 
     return {
       success: true,
@@ -190,7 +177,6 @@ export const analyzeFoodImage = async (
     };
 
   } catch (error: any) {
-    console.error('❌ Vision API hatası:', error);
     
     // Network hatası mı kontrol et
     const isNetworkError = error.message?.includes('network') || 
@@ -225,7 +211,6 @@ export const uploadMealPhoto = async (
   message?: string
 ): Promise<string> => {
   try {
-    console.log('📤 Fotoğraf Firebase Storage\'a yükleniyor...');
 
     // Network durumunu kontrol et
     const networkState = await checkNetworkStatus();
@@ -243,7 +228,6 @@ export const uploadMealPhoto = async (
     // Firebase Storage'a yükleme işlemini retry ile yap
     try {
       await retryWithBackoff(async () => {
-        console.log('⬆️ Storage\'a yükleniyor...');
         const response = await fetch(uri);
         if (!response.ok) {
           throw new Error(`Failed to fetch image: ${response.status}`);
@@ -254,15 +238,12 @@ export const uploadMealPhoto = async (
         
         await uploadBytes(storageRef, blob);
         
-        console.log('🔗 Download URL alınıyor...');
         photoUrl = await getDownloadURL(storageRef);
         finalStoragePath = storagePath;
         
-        console.log('✅ Firebase Storage yükleme başarılı');
       }, 3, 2000);
       
     } catch (storageError: any) {
-      console.warn('⚠️ Firebase Storage hatası, base64 ile devam ediliyor:', storageError.message);
       // Storage başarısız olursa base64 kullan (fallback)
       photoUrl = `data:image/jpeg;base64,${base64Image}`;
       finalStoragePath = '';
@@ -289,7 +270,6 @@ export const uploadMealPhoto = async (
 
     const docRef = await addDoc(collection(db, PHOTOS_COLLECTION), photoData);
 
-    console.log('✅ Fotoğraf Firestore\'a kaydedildi:', docRef.id);
 
     // Get patient info to send notification to dietitian
     try {
@@ -315,19 +295,15 @@ export const uploadMealPhoto = async (
               mealName,
               message
             );
-            console.log('✅ Diyetisyene bildirim gönderildi');
           } else {
-            console.log('⚠️ Diyetisyen push token\'ı yok');
           }
         }
       }
     } catch (notificationError) {
-      console.error('⚠️ Bildirim gönderme hatası (kritik değil):', notificationError);
     }
 
     return docRef.id;
   } catch (error: any) {
-    console.error('❌ Fotoğraf kaydetme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -337,7 +313,6 @@ export const getPatientMealPhotos = async (
   patientId: string
 ): Promise<MealPhoto[]> => {
   try {
-    console.log('📸 Hasta fotoğrafları yükleniyor...');
 
     const q = query(
       collection(db, PHOTOS_COLLECTION),
@@ -365,10 +340,8 @@ export const getPatientMealPhotos = async (
       } as MealPhoto;
     });
 
-    console.log('✅ Fotoğraflar yüklendi:', photos.length);
     return photos.sort((a, b) => b.uploadedAt - a.uploadedAt);
   } catch (error: any) {
-    console.error('❌ Fotoğraf yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -408,7 +381,6 @@ export const getPhotosByMealType = async (
 
     return photos.sort((a, b) => b.uploadedAt - a.uploadedAt);
   } catch (error: any) {
-    console.error('❌ Hata:', error);
     throw new Error(error.message);
   }
 };
@@ -419,16 +391,13 @@ export const deleteMealPhoto = async (
   storagePath: string
 ): Promise<void> => {
   try {
-    console.log('🗑️ Fotoğraf siliniyor...');
 
     const fileRef = ref(storage, storagePath);
     await deleteObject(fileRef);
 
     await deleteDoc(doc(db, PHOTOS_COLLECTION, photoId));
 
-    console.log('✅ Fotoğraf silindi');
   } catch (error: any) {
-    console.error('❌ Silme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -439,7 +408,6 @@ export const getDietitianPatientPhotos = async (
   patientId: string
 ): Promise<MealPhoto[]> => {
   try {
-    console.log('📸 Hasta fotoğrafları yükleniyor (Diyetisyen)...');
 
     const q = query(
       collection(db, PHOTOS_COLLECTION),
@@ -447,11 +415,9 @@ export const getDietitianPatientPhotos = async (
     );
 
     const querySnapshot = await getDocs(q);
-    console.log(`📊 Bulunan fotoğraf sayısı: ${querySnapshot.docs.length}`);
 
     const photos: MealPhoto[] = querySnapshot.docs.map((doc) => {
       const data = doc.data();
-      console.log(`📸 Fotoğraf ID: ${doc.id}, photoBase64 var mı: ${!!data.photoBase64}, photoUrl var mı: ${!!data.photoUrl}`);
 
       return {
         id: doc.id,
@@ -471,10 +437,8 @@ export const getDietitianPatientPhotos = async (
       } as MealPhoto;
     });
 
-    console.log(`✅ İşlenen fotoğraf sayısı: ${photos.length}`);
     return photos.sort((a, b) => b.uploadedAt - a.uploadedAt);
   } catch (error: any) {
-    console.error('❌ Fotoğraflar yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -490,9 +454,7 @@ export const updateMealPhoto = async (
       ...updates,
       updatedAt: Timestamp.now(),
     });
-    console.log('✅ Fotoğraf güncellendi');
   } catch (error: any) {
-    console.error('❌ Güncelleme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -509,7 +471,6 @@ export const addDietitianResponseToPhoto = async (
       respondedAt: Date.now(),
       updatedAt: Timestamp.now(),
     });
-    console.log('✅ Diyetisyen cevabı eklendi');
 
     // Get photo data to access patientId and mealName
     const photoDoc = await getDoc(photoRef);
@@ -547,19 +508,15 @@ export const addDietitianResponseToPhoto = async (
                   mealName,
                   response
                 );
-                console.log('✅ Danışana bildirim gönderildi');
               } catch (notifError) {
-                console.error('⚠️ Bildirim gönderme hatası (kritik değil):', notifError);
               }
             } else {
-              console.log('⚠️ Danışan push token\'ı yok');
             }
           }
         }
       }
     }
   } catch (error: any) {
-    console.error('❌ Cevap ekleme hatası:', error);
     throw new Error(error.message);
   }
 };

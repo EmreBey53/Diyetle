@@ -1,4 +1,3 @@
-// src/models/PatientProfile.ts
 export interface PatientProfile {
   id?: string;
   userId: string;

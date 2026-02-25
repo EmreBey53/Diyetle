@@ -1,4 +1,3 @@
-// src/components/QuestionsModal.tsx
 import React from 'react';
 import {
   View,

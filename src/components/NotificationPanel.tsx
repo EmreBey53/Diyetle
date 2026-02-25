@@ -1,4 +1,3 @@
-// src/components/NotificationPanel.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -48,7 +47,6 @@ export default function NotificationPanel({
       const userNotifications = await getUserNotifications(userId);
       setNotifications(userNotifications);
     } catch (error) {
-      console.error('Bildirimler yüklenirken hata:', error);
     } finally {
       setLoading(false);
     }
@@ -62,7 +60,6 @@ export default function NotificationPanel({
       await Notifications.dismissAllNotificationsAsync();
       setNotifications([]);
     } catch (error) {
-      console.error('Bildirimler silinirken hata:', error);
     }
   };
 

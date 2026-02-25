@@ -1,4 +1,3 @@
-// src/screens/ViewPatientProgressScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -23,8 +22,6 @@ import { colors } from '../constants/colors';
 export default function ViewPatientProgressScreen({ route, navigation }: any) {
   const { patient } = route.params;
 
-  console.log('🔥🔥🔥 YENİ ViewPatientProgressScreen AÇILDI!!! 🔥🔥🔥');
-  console.log('🔥🔥🔥 activeTab sistemi var! 🔥🔥🔥');
 
   const [activeTab, setActiveTab] = useState<'diet' | 'progress'>('diet');
   
@@ -57,7 +54,6 @@ export default function ViewPatientProgressScreen({ route, navigation }: any) {
       const dietPlansData = await getDietPlansByPatient(patient.id);
       setDietPlans(dietPlansData);
     } catch (error: any) {
-      console.error('❌ Veri yükleme hatası:', error);
     } finally {
       setLoading(false);
     }

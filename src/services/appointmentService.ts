@@ -54,10 +54,8 @@ export const createAppointment = async (
     };
 
     const docRef = await addDoc(collection(db, APPOINTMENTS_COLLECTION), appointmentData);
-    console.log('✅ Randevu oluşturuldu, ID:', docRef.id);
     return docRef.id;
   } catch (error: any) {
-    console.error('❌ Randevu oluşturma hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -94,10 +92,8 @@ export const getDietitianAppointments = async (
       } as Appointment;
     });
 
-    console.log('✅ Diyetisyen randevuları yüklendi:', appointments.length);
     return appointments;
   } catch (error: any) {
-    console.error('❌ Randevular yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -134,10 +130,8 @@ export const getPatientAppointments = async (
       } as Appointment;
     });
 
-    console.log('✅ Hasta randevuları yüklendi:', appointments.length);
     return appointments;
   } catch (error: any) {
-    console.error('❌ Randevular yükleme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -179,7 +173,6 @@ export const subscribeToAppointments = (
 
     return unsubscribe;
   } catch (error: any) {
-    console.error('❌ Subscription hatası:', error);
     return () => {};
   }
 };
@@ -195,9 +188,7 @@ export const updateAppointment = async (
       ...updates,
       updatedAt: Timestamp.now(),
     });
-    console.log('✅ Randevu güncellendi:', appointmentId);
   } catch (error: any) {
-    console.error('❌ Randevu güncelleme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -210,9 +201,7 @@ export const cancelAppointment = async (appointmentId: string): Promise<void> =>
       status: 'cancelled',
       updatedAt: Timestamp.now(),
     });
-    console.log('✅ Randevu iptal edildi:', appointmentId);
   } catch (error: any) {
-    console.error('❌ Randevu iptal hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -224,9 +213,7 @@ export const deleteAppointment = async (
   try {
     const appointmentRef = doc(db, APPOINTMENTS_COLLECTION, appointmentId);
     await deleteDoc(appointmentRef);
-    console.log('✅ Randevu silindi:', appointmentId);
   } catch (error: any) {
-    console.error('❌ Randevu silme hatası:', error);
     throw new Error(error.message);
   }
 };
@@ -247,10 +234,8 @@ export const getUpcomingAppointments = async (
         apt.status === 'scheduled'
     );
 
-    console.log('✅ Yaklaşan randevular:', upcoming.length);
     return upcoming;
   } catch (error: any) {
-    console.error('❌ Yaklaşan randevular hatası:', error);
     throw new Error(error.message);
   }
 };
