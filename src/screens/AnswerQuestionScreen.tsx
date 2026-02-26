@@ -140,6 +140,7 @@ export default function AnswerQuestionScreen({ route, navigation }: any) {
             <TextInput
               style={styles.answerInput}
               placeholder="Cevabınızı buraya yazın..."
+              placeholderTextColor={colors.textLight}
               value={answer}
               onChangeText={setAnswer}
               multiline
@@ -189,7 +190,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     padding: 20,
   },
   questionCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.cardBackground,
     padding: 20,
     borderRadius: 12,
     marginBottom: 20,
@@ -244,17 +245,19 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingTop: 10,
   },
   existingAnswerCard: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: colors.cardBackground,
     padding: 20,
     borderRadius: 12,
     marginBottom: 20,
     borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+    borderLeftColor: colors.success,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   existingAnswerLabel: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#2E7D32',
+    color: colors.success,
     marginBottom: 8,
   },
   existingAnswerText: {
@@ -265,11 +268,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   answeredDate: {
     fontSize: 13,
-    color: '#2E7D32',
+    color: colors.textLight,
     fontStyle: 'italic',
   },
   answerCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.cardBackground,
     padding: 20,
     borderRadius: 12,
     marginBottom: 20,
@@ -294,6 +297,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: 20,
+    color: colors.text,
   },
   submitButton: {
     backgroundColor: colors.primary,
