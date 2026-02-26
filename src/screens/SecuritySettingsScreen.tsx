@@ -10,7 +10,8 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../constants/colors';
+import { getColors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
 import { getKVKKConsent, requestDataPortability, requestDataErasure } from '../services/kvkkService';
 import { getAuditLogs } from '../services/auditService';
@@ -124,6 +125,8 @@ Bu metni okudum ve verilerimin anonimleştirilerek istatistiksel amaçlarla kull
 };
 
 export default function SecuritySettingsScreen({ navigation }: any) {
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
   const [currentUser, setCurrentUser] = useState<any>(null);
   // KVKK rıza durumu artık sadece onay tarihi için kullanılıyor
   // Tüm rızalar zorunlu olduğundan durumları gösterilmiyor
@@ -217,6 +220,8 @@ export default function SecuritySettingsScreen({ navigation }: any) {
       </View>
     );
   };
+
+  const styles = createStyles(colors);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -390,37 +395,37 @@ export default function SecuritySettingsScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof getColors>) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.darkGray,
+    color: colors.text,
     marginLeft: 16,
   },
   section: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    borderBottomColor: colors.border,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.darkGray,
+    color: colors.text,
     marginBottom: 16,
   },
   consentDateBanner: {
@@ -439,16 +444,16 @@ const styles = StyleSheet.create({
   },
   readOnlyNote: {
     fontSize: 13,
-    color: colors.gray,
+    color: colors.textLight,
     marginBottom: 16,
   },
   consentCard: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.cardBackground,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: colors.lightGray,
+    borderColor: colors.border,
   },
   consentCardHeader: {
     flexDirection: 'row',
@@ -458,7 +463,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: colors.white,
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -469,12 +474,12 @@ const styles = StyleSheet.create({
   consentCardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.darkGray,
+    color: colors.text,
     marginBottom: 2,
   },
   consentCardSubtitle: {
     fontSize: 13,
-    color: colors.gray,
+    color: colors.textLight,
   },
   statusBadgeAccepted: {
     flexDirection: 'row',
@@ -521,7 +526,7 @@ const styles = StyleSheet.create({
   statusBadgeOptional: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.gray + '20',
+    backgroundColor: colors.border,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -529,7 +534,7 @@ const styles = StyleSheet.create({
   },
   statusTextOptional: {
     fontSize: 12,
-    color: colors.gray,
+    color: colors.textLight,
     fontWeight: '500',
   },
   consentCardFooter: {
@@ -539,7 +544,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.lightGray,
+    borderTopColor: colors.border,
   },
   tapToReadText: {
     fontSize: 13,
@@ -550,7 +555,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    borderBottomColor: colors.border,
   },
   actionText: {
     flex: 1,
@@ -559,11 +564,11 @@ const styles = StyleSheet.create({
   actionTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: colors.darkGray,
+    color: colors.text,
   },
   actionDescription: {
     fontSize: 14,
-    color: colors.gray,
+    color: colors.textLight,
     marginTop: 4,
   },
   logItem: {
@@ -572,20 +577,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    borderBottomColor: colors.border,
   },
   logAction: {
     fontSize: 14,
-    color: colors.darkGray,
+    color: colors.text,
     flex: 1,
   },
   logTime: {
     fontSize: 12,
-    color: colors.gray,
+    color: colors.textLight,
   },
   noLogsText: {
     fontSize: 14,
-    color: colors.gray,
+    color: colors.textLight,
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 16,
@@ -596,7 +601,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.cardBackground,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',
@@ -607,12 +612,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.darkGray,
+    color: colors.text,
     flex: 1,
     marginRight: 16,
   },
@@ -622,7 +627,7 @@ const styles = StyleSheet.create({
   },
   modalText: {
     fontSize: 14,
-    color: colors.darkGray,
+    color: colors.text,
     lineHeight: 22,
   },
   modalCloseButton: {

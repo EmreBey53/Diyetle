@@ -12,9 +12,12 @@ import {
 import { getCurrentUser } from '../services/authService';
 import { getPatientProfileByUserId, updatePatient } from '../services/patientService';
 import { calculateBMI } from '../models/Progress';
-import { colors } from '../constants/colors';
+import { getColors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function EditProfileScreen({ navigation }: any) {
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileId, setProfileId] = useState('');
@@ -107,6 +110,8 @@ export default function EditProfileScreen({ navigation }: any) {
     }
   };
 
+  const styles = createStyles(colors);
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -128,6 +133,7 @@ export default function EditProfileScreen({ navigation }: any) {
         <TextInput
           style={styles.input}
           placeholder="Örn: Ahmet Yılmaz"
+          placeholderTextColor={colors.textLight}
           value={name}
           onChangeText={setName}
         />
@@ -136,6 +142,7 @@ export default function EditProfileScreen({ navigation }: any) {
         <TextInput
           style={styles.input}
           placeholder="Örn: 0555 123 4567"
+          placeholderTextColor={colors.textLight}
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
@@ -147,6 +154,7 @@ export default function EditProfileScreen({ navigation }: any) {
             <TextInput
               style={styles.input}
               placeholder="170"
+              placeholderTextColor={colors.textLight}
               value={height}
               onChangeText={(text) => setHeight(text.replace(',', '.'))}
               keyboardType="decimal-pad"
@@ -158,6 +166,7 @@ export default function EditProfileScreen({ navigation }: any) {
             <TextInput
               style={styles.input}
               placeholder="70"
+              placeholderTextColor={colors.textLight}
               value={weight}
               onChangeText={(text) => setWeight(text.replace(',', '.'))}
               keyboardType="decimal-pad"
@@ -192,7 +201,7 @@ export default function EditProfileScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof getColors>) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -237,12 +246,13 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   input: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.cardBackground,
     padding: 15,
     borderRadius: 10,
     fontSize: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    color: colors.text,
   },
   row: {
     flexDirection: 'row',

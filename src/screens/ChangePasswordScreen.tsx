@@ -10,9 +10,12 @@ import {
   ScrollView,
 } from 'react-native';
 import { getAuth, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { colors } from '../constants/colors';
+import { getColors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function ChangePasswordScreen({ navigation }: any) {
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -83,6 +86,8 @@ export default function ChangePasswordScreen({ navigation }: any) {
     }
   };
 
+  const styles = createStyles(colors);
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
@@ -106,6 +111,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
           <TextInput
             style={styles.passwordInput}
             placeholder="Mevcut şifreniz"
+            placeholderTextColor={colors.textLight}
             value={currentPassword}
             onChangeText={setCurrentPassword}
             secureTextEntry={!showCurrent}
@@ -123,6 +129,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
           <TextInput
             style={styles.passwordInput}
             placeholder="Yeni şifreniz (min. 6 karakter)"
+            placeholderTextColor={colors.textLight}
             value={newPassword}
             onChangeText={setNewPassword}
             secureTextEntry={!showNew}
@@ -140,6 +147,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
           <TextInput
             style={styles.passwordInput}
             placeholder="Yeni şifrenizi tekrar girin"
+            placeholderTextColor={colors.textLight}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry={!showConfirm}
@@ -170,7 +178,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof getColors>) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -201,22 +209,22 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   infoCard: {
-    backgroundColor: '#FFF3CD',
+    backgroundColor: colors.warning + '22',
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#FFE69C',
+    borderColor: colors.warning + '55',
   },
   infoText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#856404',
+    color: colors.warning,
     marginBottom: 8,
   },
   infoItem: {
     fontSize: 14,
-    color: '#856404',
+    color: colors.warning,
     marginLeft: 10,
     marginVertical: 2,
   },
@@ -230,7 +238,7 @@ const styles = StyleSheet.create({
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.cardBackground,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
@@ -239,6 +247,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 15,
     fontSize: 16,
+    color: colors.text,
   },
   eyeButton: {
     padding: 15,

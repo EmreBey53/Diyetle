@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
   developerDivider: {
     width: '100%',
     height: 1,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.border,
     marginVertical: 16,
   },
   developerNote: {
