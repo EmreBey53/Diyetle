@@ -98,7 +98,12 @@ export default function DietitianQuestionsScreen({ route, navigation }: any) {
   const renderQuestionItem = ({ item }: { item: Question }) => (
     <TouchableOpacity
       style={[styles.questionCard, { backgroundColor: colors.cardBackground }]}
-      onPress={() => navigation.navigate('AnswerQuestion', { question: item })}
+      onPress={() => navigation.navigate('AnswerQuestion', { question: {
+        ...item,
+        createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+        updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt,
+        answeredAt: item.answeredAt instanceof Date ? item.answeredAt.toISOString() : item.answeredAt,
+      } })}
     >
       <View style={styles.questionHeader}>
         <Text style={[styles.patientName, { color: colors.text }]}>👤 {item.patientName}</Text>

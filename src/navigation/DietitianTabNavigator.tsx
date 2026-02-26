@@ -167,7 +167,12 @@ function TabNavigatorContent() {
         questions={questions}
         onQuestionPress={(question) => {
           closeQuestionsModal();
-          navigation.navigate('AnswerQuestion', { question });
+          navigation.navigate('AnswerQuestion', { question: {
+            ...question,
+            createdAt: question.createdAt instanceof Date ? question.createdAt.toISOString() : question.createdAt,
+            updatedAt: question.updatedAt instanceof Date ? question.updatedAt.toISOString() : question.updatedAt,
+            answeredAt: question.answeredAt instanceof Date ? question.answeredAt.toISOString() : question.answeredAt,
+          } });
         }}
       />
     </>
