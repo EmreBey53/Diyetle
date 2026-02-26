@@ -111,12 +111,24 @@ export const loginUser = async (
       severity: 'medium',
     });
 
-    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+    if (
+      error.code === 'auth/user-not-found' ||
+      error.code === 'auth/wrong-password' ||
+      error.code === 'auth/invalid-credential'
+    ) {
       throw new Error('E-posta veya şifre hatalı!');
     } else if (error.code === 'auth/invalid-email') {
-      throw new Error('Geçersiz e-posta adresi!');
+      throw new Error('Geçersiz e-posta adresi formatı!');
+    } else if (error.code === 'auth/user-disabled') {
+      throw new Error('Bu hesap devre dışı bırakılmış!');
+    } else if (error.code === 'auth/too-many-requests') {
+      throw new Error('Çok fazla başarısız deneme! Lütfen bir süre bekleyin.');
+    } else if (error.code === 'auth/network-request-failed') {
+      throw new Error('İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.');
+    } else if (error.message && !error.code) {
+      throw error;
     }
-    throw new Error(error.message);
+    throw new Error('Giriş yapılamadı. Lütfen tekrar deneyin.');
   }
 };
 

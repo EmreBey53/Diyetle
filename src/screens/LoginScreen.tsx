@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { loginUser } from '../services/authService';
 import { colors } from '../constants/colors';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -28,10 +27,6 @@ export default function LoginScreen({ navigation }: any) {
     setLoading(true);
     try {
       const user = await loginUser(email, password);
-
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-
-      Alert.alert('Başarılı!', `Hoş geldin ${user.displayName}! 🎉`);
 
       if (user.role === 'dietitian') {
         navigation.replace('DietitianHome');
