@@ -291,7 +291,7 @@ export default function HelpSupportScreen({ navigation }: any) {
             <Text style={[styles.developerEmail, { color: colors.textLight }]}>
               yuemreyzc@gmail.com
             </Text>
-            <View style={styles.developerDivider} />
+            <View style={[styles.developerDivider, { backgroundColor: colors.border }]} />
             <Text style={[styles.developerNote, { color: colors.textLight }]}>
               Bu uygulama, diyetisyenlerin danışanlarını daha etkili takip edebilmeleri için
               geliştirilmiştir. Geri bildirimleriniz ve önerileriniz için bizimle iletişime geçebilirsiniz.
@@ -469,7 +469,6 @@ const styles = StyleSheet.create({
   developerDivider: {
     width: '100%',
     height: 1,
-    backgroundColor: colors.border,
     marginVertical: 16,
   },
   developerNote: {
