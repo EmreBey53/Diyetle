@@ -7,17 +7,24 @@ import {
   Modal,
   ScrollView,
   Alert,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebaseConfig';
 import { getColors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface ProfilePickerProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (type: 'emoji' | 'avatar', value: string) => void;
+  onSelect: (type: 'emoji' | 'avatar' | 'photo', value: string) => void;
   currentEmoji?: string;
   currentAvatar?: string;
+  currentPhotoURL?: string;
+  userId?: string;
 }
 
 const EMOJI_OPTIONS = [
@@ -49,21 +56,63 @@ export default function ProfilePicker({
   onSelect,
   currentEmoji,
   currentAvatar,
+  currentPhotoURL,
+  userId,
 }: ProfilePickerProps) {
   const { isDark } = useTheme();
   const colors = getColors(isDark);
-  const [selectedTab, setSelectedTab] = useState<'emoji' | 'avatar'>('emoji');
+  const [selectedTab, setSelectedTab] = useState<'emoji' | 'avatar' | 'photo'>('emoji');
+  const [uploading, setUploading] = useState(false);
 
   const handleSelectEmoji = (emoji: string) => {
     onSelect('emoji', emoji);
-    Alert.alert('Başarılı', 'Profil emojiniz güncellendi!');
+    Alert.alert('Başarılı', 'Profil emojin güncellendi!');
     onClose();
   };
 
   const handleSelectAvatar = (avatarId: string) => {
     onSelect('avatar', avatarId);
-    Alert.alert('Başarılı', 'Profil avatarınız güncellendi!');
+    Alert.alert('Başarılı', 'Profil avatarın güncellendi!');
     onClose();
+  };
+
+  const handlePickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('İzin Gerekli', 'Fotoğraf seçmek için galeri erişim izni gerekiyor.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    if (!userId) {
+      Alert.alert('Hata', 'Kullanıcı bilgisi alınamadı.');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const uri = result.assets[0].uri;
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const storageRef = ref(storage, `profile_photos/${userId}.jpg`);
+      await uploadBytes(storageRef, blob);
+      const downloadURL = await getDownloadURL(storageRef);
+      onSelect('photo', downloadURL);
+      Alert.alert('Başarılı', 'Profil fotoğrafın güncellendi!');
+      onClose();
+    } catch {
+      Alert.alert('Hata', 'Fotoğraf yüklenemedi. Lütfen tekrar deneyin.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -93,12 +142,7 @@ export default function ProfilePicker({
               ]}
               onPress={() => setSelectedTab('emoji')}
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  { color: selectedTab === 'emoji' ? colors.white : colors.text },
-                ]}
-              >
+              <Text style={[styles.tabText, { color: selectedTab === 'emoji' ? colors.white : colors.text }]}>
                 😊 Emoji
               </Text>
             </TouchableOpacity>
@@ -110,13 +154,20 @@ export default function ProfilePicker({
               ]}
               onPress={() => setSelectedTab('avatar')}
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  { color: selectedTab === 'avatar' ? colors.white : colors.text },
-                ]}
-              >
+              <Text style={[styles.tabText, { color: selectedTab === 'avatar' ? colors.white : colors.text }]}>
                 👤 Avatar
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === 'photo' && styles.activeTab,
+                { backgroundColor: selectedTab === 'photo' ? colors.primary : 'transparent' },
+              ]}
+              onPress={() => setSelectedTab('photo')}
+            >
+              <Text style={[styles.tabText, { color: selectedTab === 'photo' ? colors.white : colors.text }]}>
+                📷 Fotoğraf
               </Text>
             </TouchableOpacity>
           </View>
@@ -144,7 +195,7 @@ export default function ProfilePicker({
                   </TouchableOpacity>
                 ))}
               </View>
-            ) : (
+            ) : selectedTab === 'avatar' ? (
               <View style={styles.avatarGrid}>
                 {AVATAR_PRESETS.map((avatar) => (
                   <TouchableOpacity
@@ -166,6 +217,36 @@ export default function ProfilePicker({
                     )}
                   </TouchableOpacity>
                 ))}
+              </View>
+            ) : (
+              <View style={styles.photoContainer}>
+                {currentPhotoURL ? (
+                  <Image source={{ uri: currentPhotoURL }} style={styles.currentPhoto} />
+                ) : (
+                  <View style={[styles.photoPlaceholder, { backgroundColor: colors.background }]}>
+                    <Ionicons name="person" size={64} color={colors.textLight} />
+                    <Text style={[styles.photoPlaceholderText, { color: colors.textLight }]}>
+                      Henüz fotoğraf yok
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[styles.pickPhotoButton, { backgroundColor: colors.primary }]}
+                  onPress={handlePickPhoto}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="image-outline" size={22} color="#fff" />
+                      <Text style={styles.pickPhotoButtonText}>Galeriden Seç</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <Text style={[styles.photoHint, { color: colors.textLight }]}>
+                  Fotoğraf kare olarak kırpılacak
+                </Text>
               </View>
             )}
           </ScrollView>
@@ -300,5 +381,44 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
+  },
+  photoContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 20,
+  },
+  currentPhoto: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 3,
+    borderColor: '#4CAF50',
+  },
+  photoPlaceholder: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  photoPlaceholderText: {
+    fontSize: 13,
+  },
+  pickPhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+  },
+  pickPhotoButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  photoHint: {
+    fontSize: 13,
   },
 });

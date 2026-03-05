@@ -1,6 +1,6 @@
 import {
   ref,
-  uploadBytes,
+  uploadString,
   getDownloadURL,
   deleteObject,
 } from 'firebase/storage';
@@ -14,14 +14,14 @@ import {
   query,
   where,
   Timestamp,
-  updateDoc,r
+  updateDoc,
 } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { storage, db } from '../firebaseConfig';
 import { MealPhoto, FoodDetectionResult } from '../models/MealPhoto';
 import { notifyDietitianMealPhoto, notifyPatientPhotoResponse } from './notificationService';
 import { ENV } from '../config/env';
-import { checkNetworkStatus, retryWithBackoff } from '../utils/networkUtils';
+import { checkNetworkStatus } from '../utils/networkUtils';
 
 const PHOTOS_COLLECTION = 'mealPhotos';
 const STORAGE_PATH = 'meal-photos';
@@ -45,156 +45,98 @@ export const requestGalleryPermission = async (): Promise<boolean> => {
   }
 };
 
-// GOOGLE VISION API - SECURE VERSION WITH NETWORK HANDLING
+// GOOGLE GEMINI FLASH — Ücretsiz görsel analiz (500 istek/gün)
 export const analyzeFoodImage = async (
   base64Image: string
 ): Promise<FoodDetectionResult> => {
   try {
-
-    // Network durumunu kontrol et
+    // Network kontrolü
     const networkState = await checkNetworkStatus();
     if (!networkState.isConnected) {
       return {
         success: false,
-        message: 'İnternet bağlantısı yok. Fotoğraf yine de gönderilebilir.',
+        message: 'İnternet bağlantısı yok.',
         error: 'No network connection',
-        data: {
-          isFood: true, // Offline fallback
-          confidence: 50,
-          labels: ['offline'],
-          foodItems: ['yemek'],
-        },
+        data: { isFood: false, confidence: 0, labels: [], foodItems: [] },
       };
     }
 
-    // API key'i environment'dan al
-    const apiKey = ENV.GOOGLE_VISION_API_KEY;
+    const apiKey = ENV.GEMINI_API_KEY;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-    // Retry mekanizması ile API çağrısı
-    const result = await retryWithBackoff(async () => {
+    const prompt = `Bu fotoğrafa bak ve şu soruları yanıtla (sadece JSON formatında, başka hiçbir şey yazma):
+{
+  "isFood": true/false,
+  "confidence": 0-100 arası sayı,
+  "foodItems": ["yemek adı 1", "yemek adı 2"],
+  "description": "kısa Türkçe açıklama"
+}
 
-      const response = await fetch(
-        `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            requests: [
-              {
-                image: {
-                  content: base64Image,
-                },
-                features: [
-                  {
-                    type: 'LABEL_DETECTION',
-                    maxResults: 10,
-                  },
-                ],
-              },
-            ],
-          }),
-        }
-      );
+Kurallar:
+- isFood: Fotoğrafta yenebilir bir yiyecek/içecek varsa true, yoksa false
+- confidence: Ne kadar emin olduğun (0-100)
+- foodItems: Tespit ettiğin yiyeceklerin Türkçe adları (max 5 madde)
+- description: 1 cümlelik Türkçe açıklama`;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Vision API HTTP ${response.status}: ${errorText}`);
-      }
+    const requestBody = {
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
+        ],
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+    };
 
-      const data = await response.json();
-      
-      // API error kontrolü
-      if (data.responses?.[0]?.error) {
-        throw new Error(`Vision API Error: ${data.responses[0].error.message}`);
-      }
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
 
-      return data;
-    }, 3, 1000);
-
-    const labels = result.responses[0]?.labelAnnotations || [];
-
-
-    const foodKeywords = [
-      'food',
-      'dish',
-      'meal',
-      'cuisine',
-      'ingredient',
-      'drink',
-      'beverage',
-      'fruit',
-      'vegetable',
-      'meat',
-      'fish',
-      'bread',
-      'pasta',
-      'rice',
-      'salad',
-      'soup',
-      'dessert',
-      'snack',
-      'breakfast',
-      'lunch',
-      'dinner',
-      'plate',
-      'bowl',
-      'cup',
-    ];
-
-    const detectedLabels = labels.map((l: any) => l.description.toLowerCase());
-    const foodLabels = detectedLabels.filter((label: string) =>
-      foodKeywords.some((keyword) => label.includes(keyword))
-    );
-
-    let foodConfidence = 0;
-    if (foodLabels.length > 0) {
-      const matchedScores = labels
-        .filter((l: any) =>
-          foodKeywords.some((keyword) =>
-            l.description.toLowerCase().includes(keyword)
-          )
-        )
-        .map((l: any) => l.score * 100);
-      foodConfidence = Math.max(...matchedScores, 0);
+    if (!response.ok) {
+      throw new Error(`Gemini API HTTP ${response.status}`);
     }
 
-    const isFood = foodConfidence > 30;
+    const result = await response.json();
+    const text: string = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
+    // JSON bloğunu parse et (markdown code block veya düz JSON)
+    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || text.match(/(\{[\s\S]*\})/);
+    if (!jsonMatch) {
+      throw new Error('Gemini yanıtı parse edilemedi');
+    }
+
+    const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+    const isFood: boolean = parsed.isFood === true;
+    const confidence: number = Math.max(0, Math.min(100, Number(parsed.confidence) || 0));
+    const foodItems: string[] = Array.isArray(parsed.foodItems) ? parsed.foodItems : [];
+    const description: string = parsed.description || '';
 
     return {
       success: true,
       message: isFood
-        ? `Yemek tespit edildi (${foodConfidence.toFixed(0)}% emin)`
-        : 'Bu bir yemek fotoğrafı değil gibi görünüyor',
+        ? `Yemek tespit edildi: ${description}`
+        : `Yemek fotoğrafı değil: ${description}`,
       data: {
         isFood,
-        confidence: Math.round(foodConfidence),
-        labels: detectedLabels,
-        foodItems: foodLabels,
+        confidence,
+        labels: foodItems,
+        foodItems,
       },
     };
 
   } catch (error: any) {
-    
-    // Network hatası mı kontrol et
-    const isNetworkError = error.message?.includes('network') || 
-                          error.message?.includes('fetch') ||
-                          error.message?.includes('connection');
-    
+    const isNetworkError = error.message?.includes('network') ||
+      error.message?.includes('fetch') || error.message?.includes('connection');
+
     return {
       success: false,
-      message: isNetworkError 
-        ? 'İnternet bağlantısı sorunu. Fotoğraf yine de gönderilebilir.'
-        : 'Resim analiz edilirken hata oluştu. Lütfen tekrar deneyin.',
+      message: isNetworkError
+        ? 'İnternet bağlantısı sorunu.'
+        : 'Görsel analizi şu an kullanılamıyor.',
       error: error.message,
-      data: {
-        isFood: true, // Fallback
-        confidence: 50,
-        labels: ['error'],
-        foodItems: ['yemek'],
-      },
+      data: { isFood: false, confidence: 0, labels: [], foodItems: [] },
     };
   }
 };
@@ -225,28 +167,14 @@ export const uploadMealPhoto = async (
     let photoUrl = '';
     let finalStoragePath = '';
 
-    // Firebase Storage'a yükleme işlemini retry ile yap
+    // Base64'ü direkt Firebase Storage'a yükle (fetch/blob yok → Expo URI sorunları bypass)
     try {
-      await retryWithBackoff(async () => {
-        const response = await fetch(uri);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch image: ${response.status}`);
-        }
-        
-        const blob = await response.blob();
-        const storageRef = ref(storage, storagePath);
-        
-        await uploadBytes(storageRef, blob);
-        
-        photoUrl = await getDownloadURL(storageRef);
-        finalStoragePath = storagePath;
-        
-      }, 3, 2000);
-      
+      const storageRef = ref(storage, storagePath);
+      await uploadString(storageRef, base64Image, 'base64', { contentType: 'image/jpeg' });
+      photoUrl = await getDownloadURL(storageRef);
+      finalStoragePath = storagePath;
     } catch (storageError: any) {
-      // Storage başarısız olursa base64 kullan (fallback)
-      photoUrl = `data:image/jpeg;base64,${base64Image}`;
-      finalStoragePath = '';
+      throw new Error('Fotoğraf yüklenemedi. İnternet bağlantınızı kontrol edin.');
     }
 
     // Firestore'a metadata kaydet
@@ -256,8 +184,6 @@ export const uploadMealPhoto = async (
       mealName,
       photoUrl,
       storagePath: finalStoragePath,
-      // Base64'ü sadece Storage başarısız olursa kaydet
-      ...(finalStoragePath === '' && { photoBase64: base64Image }),
       detectedLabels,
       confidence,
       isVerified: true,

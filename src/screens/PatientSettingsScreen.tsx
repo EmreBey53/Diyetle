@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Switch,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getColors } from '../constants/colors';
@@ -79,16 +80,18 @@ export default function PatientSettingsScreen({ navigation }: any) {
     );
   };
 
-  const handleProfileImageSelect = async (type: 'emoji' | 'avatar', value: string) => {
+  const handleProfileImageSelect = async (type: 'emoji' | 'avatar' | 'photo', value: string) => {
     if (!user) return;
 
     try {
       if (type === 'emoji') {
         await updateUserProfileImage(user.id, value, undefined);
+      } else if (type === 'avatar') {
+        await updateUserProfileImage(user.id, undefined, value);
       } else {
+        // photo: value is a download URL — store as photoURL
         await updateUserProfileImage(user.id, undefined, value);
       }
-      // Reload user to get updated profile
       await loadData();
     } catch (error: any) {
       Alert.alert('Hata', error.message);
@@ -102,7 +105,16 @@ export default function PatientSettingsScreen({ navigation }: any) {
     }
 
     if (user?.profileImage) {
-      // Avatar preset - find the matching avatar
+      // Photo URL (starts with https)
+      if (user.profileImage.startsWith('http')) {
+        return (
+          <Image
+            source={{ uri: user.profileImage }}
+            style={{ width: 80, height: 80, borderRadius: 40 }}
+          />
+        );
+      }
+      // Avatar preset
       const avatarPreset = AVATAR_PRESETS.find(a => a.id === user.profileImage);
       if (avatarPreset) {
         return (
@@ -245,8 +257,39 @@ export default function PatientSettingsScreen({ navigation }: any) {
               subtitle="Hesap güvenliğinizi güncelleyin"
               onPress={() => navigation.navigate('ChangePassword')}
             />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <SettingItem
+              icon="mail-outline"
+              title="E-posta Değiştir"
+              subtitle="Hesabınızın e-posta adresini güncelleyin"
+              onPress={() => navigation.navigate('ChangeEmail')}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <SettingItem
+              icon="person-add-outline"
+              title="Diyetisyen Değiştir"
+              subtitle={patient?.dietitianId ? 'Mevcut diyetisyeninizi değiştirin' : 'Diyetisyen seçin'}
+              onPress={() =>
+                navigation.navigate('SelectDietitian', { isChanging: true })
+              }
+            />
           </View>
         </View>
+
+        {/* Dietitian */}
+        {patient?.dietitianId && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Diyetisyenim</Text>
+            <View style={[styles.settingsCard, { backgroundColor: colors.cardBackground }]}>
+              <SettingItem
+                icon="medical-outline"
+                title="Diyetisyen Profilini Gör"
+                subtitle="Diyetisyeninizin bilgilerini inceleyin"
+                onPress={() => navigation.navigate('DietitianProfile')}
+              />
+            </View>
+          </View>
+        )}
 
         {/* My Progress */}
         <View style={styles.section}>
@@ -355,6 +398,13 @@ export default function PatientSettingsScreen({ navigation }: any) {
               subtitle="Su, öğün ve egzersiz hatırlatıcıları"
               onPress={() => navigation.navigate('PatientRemindersSettings')}
             />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <SettingItem
+              icon="mail-outline"
+              title="E-posta Bildirimleri"
+              subtitle="Hangi e-postaları alacağınızı seçin"
+              onPress={() => navigation.navigate('NotificationSettings')}
+            />
           </View>
         </View>
 
@@ -407,6 +457,8 @@ export default function PatientSettingsScreen({ navigation }: any) {
         onSelect={handleProfileImageSelect}
         currentEmoji={user?.profileEmoji}
         currentAvatar={user?.profileImage}
+        currentPhotoURL={user?.profileImage?.startsWith('http') ? user.profileImage : undefined}
+        userId={user?.id}
       />
     </View>
   );

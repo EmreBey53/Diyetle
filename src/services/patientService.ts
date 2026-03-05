@@ -171,7 +171,7 @@ export const updatePatient = async (patientId: string, updates: Partial<Patient>
   }
 };
 
-export const deletePatient = async (patientId: string): Promise<void> => {
+export const deletePatient = async (patientId: string, userId?: string): Promise<void> => {
   try {
     const dietPlansQuery = query(
       collection(db, 'dietPlans'),
@@ -200,8 +200,10 @@ export const deletePatient = async (patientId: string): Promise<void> => {
     const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
     await deleteDoc(patientRef);
 
+    // users dokümanını Auth UID ile sil (patientId değil userId kullan)
+    const userDocId = userId || patientId;
     try {
-      const userRef = doc(db, 'users', patientId);
+      const userRef = doc(db, 'users', userDocId);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
         await deleteDoc(userRef);
@@ -209,6 +211,59 @@ export const deletePatient = async (patientId: string): Promise<void> => {
     } catch (error) {
     }
 
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
+// Diyetisyenin onay bekleyen hastalarını getir
+export const getPendingPatients = async (dietitianId: string): Promise<Patient[]> => {
+  try {
+    const q = query(
+      collection(db, PATIENTS_COLLECTION),
+      where('dietitianId', '==', dietitianId),
+      where('status', '==', 'pending')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => {
+      const data = d.data();
+      return {
+        ...data,
+        id: d.id,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
+      } as Patient;
+    });
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
+// Hastayı kabul et
+export const acceptPatient = async (patientId: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, PATIENTS_COLLECTION, patientId), {
+      status: 'active',
+      updatedAt: new Date(),
+    });
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
+// Hastayı reddet — patients kaydını sil, hasta tekrar diyetisyen seçebilsin
+export const rejectPatient = async (patientId: string, patientUserId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, PATIENTS_COLLECTION, patientId));
+    // users.dietitianId temizlenmeye çalışılır (rules izin vermeyebilir, kritik değil)
+    try {
+      await updateDoc(doc(db, 'users', patientUserId), {
+        dietitianId: null,
+        updatedAt: new Date(),
+      });
+    } catch (_) {
+      // Hasta tekrar giriş yapınca dietitianId'nin null olduğunu görecek ve yeni seçim yapabilecek
+    }
   } catch (error: any) {
     throw new Error(error.message);
   }

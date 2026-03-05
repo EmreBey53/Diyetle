@@ -44,11 +44,16 @@ export const saveQuestionnaire = async (
     if (questionnaireData.activityLevel) questionnaireToSave.activityLevel = questionnaireData.activityLevel;
     if (questionnaireData.notes) questionnaireToSave.notes = questionnaireData.notes;
 
-    // Save questionnaire to Firestore & Get dietitian info in parallel
-    const [questionnaireRef, dietitianDoc] = await Promise.all([
-      addDoc(collection(db, QUESTIONNAIRES_COLLECTION), questionnaireToSave),
-      getDoc(doc(db, 'users', questionnaireData.dietitianId))
-    ]);
+    // Save questionnaire to Firestore
+    const questionnaireRef = await addDoc(collection(db, QUESTIONNAIRES_COLLECTION), questionnaireToSave);
+
+    // Get dietitian info for notification (non-critical, failure won't block flow)
+    let dietitianDoc: any = null;
+    try {
+      dietitianDoc = await getDoc(doc(db, 'users', questionnaireData.dietitianId));
+    } catch (_) {
+      // Bildirim için diyetisyen okunamazsa devam et
+    }
 
 
     const patientData: any = {
@@ -56,7 +61,7 @@ export const saveQuestionnaire = async (
       dietitianId: questionnaireData.dietitianId,
       name: displayName || 'Hasta',
       email: email || '',
-      status: 'active',
+      status: 'pending', // Diyetisyen onayına kadar beklemede
       createdAt: now.toDate(),
       updatedAt: now.toDate(),
     };
@@ -105,7 +110,7 @@ export const saveQuestionnaire = async (
 
 
       try {
-        if (dietitianDoc.exists()) {
+        if (dietitianDoc && dietitianDoc.exists()) {
           const dietitianData = dietitianDoc.data();
           const dietitianPushToken = dietitianData.pushToken;
 

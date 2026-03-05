@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Modal,
   Share,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -19,6 +20,7 @@ import {
 } from '../services/appointmentService';
 import { getCurrentUser } from '../services/authService';
 import { Appointment } from '../models/Appointment';
+import EmptyState from '../components/EmptyState';
 
 export default function DietitianAppointmentsScreen({ navigation }: any) {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -109,6 +111,27 @@ export default function DietitianAppointmentsScreen({ navigation }: any) {
         title: `${appointment.patientName} - Randevu`,
       });
     } catch (error) {
+    }
+  };
+
+  const handleStartMeeting = (appointment: Appointment) => {
+    const { meetingType, meetingLink, id, patientName, patientId } = appointment;
+    if (meetingType === 'app' || meetingLink?.startsWith('https://meet.jit.si/')) {
+      const roomId = meetingLink?.startsWith('https://meet.jit.si/')
+        ? meetingLink.replace('https://meet.jit.si/', '')
+        : undefined;
+      setShowDetailModal(false);
+      navigation.navigate('VideoCall', {
+        callId: id,
+        roomId,
+        participantName: patientName,
+        patientId,
+        isInstantCall: false,
+      });
+    } else if (meetingLink) {
+      Linking.openURL(meetingLink).catch(() => {
+        Alert.alert('Hata', 'Link acilamadi.');
+      });
     }
   };
 
@@ -224,14 +247,13 @@ export default function DietitianAppointmentsScreen({ navigation }: any) {
           <ActivityIndicator size="large" color="#65C18C" />
         </View>
       ) : displayedAppointments.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={64} color="#ddd" />
-          <Text style={styles.emptyText}>
-            {selectedTab === 'upcoming'
-              ? 'Yaklaşan randevu bulunmamaktadır'
-              : 'Geçmiş randevu bulunmamaktadır'}
-          </Text>
-        </View>
+        <EmptyState
+          icon="calendar-outline"
+          title={selectedTab === 'upcoming' ? 'Yaklaşan randevu yok' : 'Geçmiş randevu yok'}
+          subtitle={selectedTab === 'upcoming' ? 'Danışanlarınızla randevu oluşturmak için + butonuna basın.' : undefined}
+          buttonText={selectedTab === 'upcoming' ? 'Randevu Oluştur' : undefined}
+          onButtonPress={selectedTab === 'upcoming' ? () => navigation.navigate('CreateAppointment') : undefined}
+        />
       ) : (
         <FlatList
           data={displayedAppointments}
@@ -309,13 +331,24 @@ export default function DietitianAppointmentsScreen({ navigation }: any) {
                   </View>
                 )}
 
+                {selectedAppointment.status === 'scheduled' &&
+                  selectedAppointment.startDateTime > Date.now() && (
+                  <TouchableOpacity
+                    style={styles.startMeetingButton}
+                    onPress={() => handleStartMeeting(selectedAppointment)}
+                  >
+                    <Ionicons name="videocam" size={20} color="#fff" />
+                    <Text style={styles.startMeetingButtonText}>Gorusmeyi Basalt</Text>
+                  </TouchableOpacity>
+                )}
+
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
                     style={styles.secondaryButton}
                     onPress={() => handleShareMeetingLink(selectedAppointment)}
                   >
                     <Ionicons name="share-social" size={20} color="#65C18C" />
-                    <Text style={styles.secondaryButtonText}>Paylaş</Text>
+                    <Text style={styles.secondaryButtonText}>Paylas</Text>
                   </TouchableOpacity>
 
                   {selectedAppointment.status === 'scheduled' && (
@@ -324,7 +357,7 @@ export default function DietitianAppointmentsScreen({ navigation }: any) {
                       onPress={() => handleCancelAppointment(selectedAppointment)}
                     >
                       <Ionicons name="close-circle" size={20} color="#ff6b6b" />
-                      <Text style={styles.dangerButtonText}>İptal Et</Text>
+                      <Text style={styles.dangerButtonText}>Iptal Et</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -412,6 +445,8 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 14, color: '#333', flex: 1 },
   linkText: { color: '#65C18C', textDecorationLine: 'underline' },
   notesText: { fontSize: 13, color: '#666', lineHeight: 20 },
+  startMeetingButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginHorizontal: 16, marginTop: 16, paddingVertical: 14, backgroundColor: '#65C18C', borderRadius: 10 },
+  startMeetingButtonText: { fontSize: 15, fontWeight: '700', color: '#fff' },
   actionButtons: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 16, gap: 12 },
   secondaryButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#65C18C', borderRadius: 8, paddingVertical: 12, gap: 8 },
   secondaryButtonText: { fontSize: 14, fontWeight: '600', color: '#65C18C' },

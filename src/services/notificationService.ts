@@ -91,6 +91,45 @@ export const scheduleLocalNotification = async (title: string, body: string) => 
   });
 };
 
+// Her sabah 08:00'de günlük özet bildirimi planla
+export const scheduleDailySummaryNotification = async (
+  mealCount: number,
+  waterGoal: number,
+  hasAppointmentToday: boolean,
+): Promise<void> => {
+  try {
+    // Önce varsa eski günlük özet bildirimini iptal et
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const n of scheduled) {
+      if (n.content.data?.type === 'daily_summary') {
+        await Notifications.cancelScheduledNotificationAsync(n.identifier);
+      }
+    }
+
+    const parts: string[] = [];
+    if (mealCount > 0) parts.push(`🍽 Bugün ${mealCount} öğünün var`);
+    if (waterGoal > 0) parts.push(`💧 ${waterGoal}L su içmeyi unutma`);
+    if (hasAppointmentToday) parts.push('📅 Bugün randevun var!');
+    if (parts.length === 0) parts.push('Sağlıklı bir gün geçir!');
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '🌞 Günaydın! Bugünkü özetiniz',
+        body: parts.join(' • '),
+        data: { type: 'daily_summary' },
+        sound: 'default',
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 8,
+        minute: 0,
+      },
+    });
+  } catch {
+    // Bildirim planlanamadıysa sessizce geç
+  }
+};
+
 export const sendPushNotification = async (
   expoPushToken: string,
   title: string,

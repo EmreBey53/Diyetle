@@ -5,18 +5,25 @@ import { User } from '../models/User';
 export const getAllDietitians = async (): Promise<User[]> => {
   try {
     const { db } = await import('../firebaseConfig');
-    const q = query(collection(db, 'users'), where('role', '==', 'dietitian'));
+    // Tek where ile sorgula — composite index gerektirmez
+    // isApproved filtresi client-side yapılır
+    const q = query(
+      collection(db, 'users'),
+      where('role', '==', 'dietitian'),
+    );
     const querySnapshot = await getDocs(q);
-    const dietitians: User[] = querySnapshot.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
-      } as User;
-    });
-    
+    const dietitians: User[] = querySnapshot.docs
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
+        } as User;
+      })
+      .filter((u: any) => u.isApproved === true); // client-side filtre
+
     return dietitians;
   } catch (error: any) {
     throw new Error(error.message);

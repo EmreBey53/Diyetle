@@ -2,11 +2,13 @@ import { auth, db } from '../firebaseConfig';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInAnonymously,
   signOut,
   updateProfile,
+  sendEmailVerification,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { User, UserRole } from '../models/User';
 import { calculateBMI } from '../models/Patient';
 import { logAuditEvent, AUDIT_ACTIONS } from './auditService';
@@ -19,12 +21,27 @@ export const registerUser = async (
   role: UserRole,
   dietitianId?: string,
   weight?: number,
-  height?: number
+  height?: number,
+  dietitianProfile?: {
+    specialization?: string;
+    bio?: string;
+    city?: string;
+    experience?: number;
+    sessionFee?: number;
+    education?: string;
+    phone?: string;
+  }
 ): Promise<User> => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const firebaseUser = userCredential.user;
     await updateProfile(firebaseUser, { displayName });
+
+    // E-posta doğrulama linki gönder
+    try {
+      await sendEmailVerification(firebaseUser);
+    } catch {}
+
     const userData: User = {
       id: firebaseUser.uid,
       email: firebaseUser.email!,
@@ -33,8 +50,31 @@ export const registerUser = async (
       createdAt: new Date(),
       updatedAt: new Date(),
       ...(role === 'patient' && dietitianId && { dietitianId }),
+      ...(role === 'dietitian' && {
+        isApproved: false,
+        ...dietitianProfile,
+      }),
     };
     await setDoc(doc(db, 'users', firebaseUser.uid), userData);
+
+    // Diyetisyen kayıt olduysa admin'e push bildirim gönder
+    if (role === 'dietitian') {
+      try {
+        const adminSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+        const adminTokens = adminSnap.docs.map((d) => d.data().pushToken).filter(Boolean);
+        if (adminTokens.length > 0) {
+          const { sendPushNotification } = await import('./notificationService');
+          await Promise.all(adminTokens.map((token: string) =>
+            sendPushNotification(
+              token,
+              '🆕 Yeni Diyetisyen Başvurusu',
+              `${displayName} platforma başvurdu. Onay için admin panelini açın.`,
+            )
+          ));
+        }
+      } catch {}
+    }
+
     if (role === 'patient' && dietitianId) {
       const patientData: any = {
         userId: firebaseUser.uid,
@@ -80,6 +120,21 @@ export const loginUser = async (
 
     const userData = userDoc.data() as User;
 
+    // Hasta için e-posta doğrulama kontrolü
+    if (userData.role === 'patient' && !firebaseUser.emailVerified) {
+      await signOut(auth);
+      throw Object.assign(
+        new Error('E-posta adresinizi doğrulamanız gerekiyor. Lütfen e-postasınıza gelen onay linkine tıklayın.'),
+        { code: 'auth/email-not-verified' }
+      );
+    }
+
+    // Diyetisyen onay kontrolü
+    if (userData.role === 'dietitian' && userData.isApproved === false) {
+      await signOut(auth);
+      throw Object.assign(new Error('PENDING_APPROVAL'), { code: 'auth/pending-approval' });
+    }
+
     await logAuditEvent({
       userId: firebaseUser.uid,
       userRole: userData.role,
@@ -111,7 +166,11 @@ export const loginUser = async (
       severity: 'medium',
     });
 
-    if (
+    if (error.code === 'auth/pending-approval') {
+      throw error; // LoginScreen'de özel ekrana yönlendir
+    } else if (error.code === 'auth/email-not-verified') {
+      throw error; // LoginScreen'de özel mesaj göster
+    } else if (
       error.code === 'auth/user-not-found' ||
       error.code === 'auth/wrong-password' ||
       error.code === 'auth/invalid-credential'
@@ -153,6 +212,11 @@ export const logoutUser = async (): Promise<void> => {
 
     await signOut(auth);
     await EncryptionService.secureDelete('user_session');
+    // Beni hatırla / otomatik giriş flag'ini temizle
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.removeItem('@diyetle_autologin');
+    } catch {}
   } catch (error: any) {
     throw new Error(error.message);
   }
@@ -190,5 +254,19 @@ export const updateUserProfileImage = async (
     await setDoc(userRef, updateData, { merge: true });
   } catch (error: any) {
     throw new Error('Profil güncelleme hatası: ' + error.message);
+  }
+};
+
+/**
+ * Kayıt ekranında diyetisyen listesi gibi herkese açık verileri okumak için
+ * anonim Firebase Auth oturumu açar. Kullanıcı zaten giriş yapmışsa hiçbir şey yapmaz.
+ */
+export const signInAnonymouslyIfNeeded = async (): Promise<void> => {
+  try {
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+    }
+  } catch {
+    // Sessizce geç — anonim auth Firebase konsolunda etkin olmayabilir
   }
 };

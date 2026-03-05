@@ -19,6 +19,8 @@ import { getCurrentUser } from '../services/authService';
 import { DietPlan, Meal, Food, getMealTypeName, getMealTypeEmoji } from '../models/DietPlan';
 import { getColors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
+import { DietTemplate } from './DietPlanTemplatesScreen';
+import { sendDietPlanEmail } from '../services/emailService';
 
 export default function CreateDietPlanScreen({ route, navigation }: any) {
   const { patient } = route.params;
@@ -184,6 +186,11 @@ export default function CreateDietPlanScreen({ route, navigation }: any) {
       return;
     }
 
+    if (!dailyWaterGoal) {
+      Alert.alert('Hata', 'Lütfen günlük su hedefini belirleyin!');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -195,6 +202,7 @@ export default function CreateDietPlanScreen({ route, navigation }: any) {
 
       const planData: any = {
         patientId: patient.id,
+        patientUserId: patient.userId,
         patientName: patient.name,
         dietitianId: currentUser.id,
         title: title.trim(),
@@ -224,6 +232,36 @@ export default function CreateDietPlanScreen({ route, navigation }: any) {
 
       Alert.alert('Başarılı!', 'Diyet planı oluşturuldu!', [
         {
+          text: 'E-posta ile Paylaş',
+          onPress: async () => {
+            if (patient.email) {
+              try {
+                await sendDietPlanEmail({
+                  patientEmail: patient.email,
+                  patientName: patient.name,
+                  dietitianName: currentUser.displayName || 'Diyetisyeniniz',
+                  planName: planData.title,
+                  planDescription: planData.description,
+                  dailyCalorieTarget: planData.dailyCalorieTarget,
+                  dailyWaterGoal: planData.dailyWaterGoal,
+                  notes: planData.notes,
+                  meals: meals.map((m) => ({
+                    name: getMealTypeName(m.type),
+                    time: m.time,
+                    foods: m.foods?.map((f) => ({ name: f.name, amount: f.portion, calories: f.calories })),
+                  })),
+                });
+                Alert.alert('Gönderildi', `Diyet planı ${patient.email} adresine gönderildi.`);
+              } catch {
+                Alert.alert('Hata', 'E-posta gönderilemedi. Lütfen mail servisini kontrol edin.');
+              }
+            } else {
+              Alert.alert('Bilgi', 'Hastanın e-posta adresi bulunamadı.');
+            }
+            navigation.goBack();
+          },
+        },
+        {
           text: 'Tamam',
           onPress: () => navigation.goBack(),
         },
@@ -247,6 +285,36 @@ export default function CreateDietPlanScreen({ route, navigation }: any) {
             <Text style={styles.headerTitle}>Diyet Planı Oluştur</Text>
             <Text style={styles.headerSubtitle}>{patient.name} için</Text>
           </View>
+
+          {/* Şablondan Yükle */}
+          <TouchableOpacity
+            style={styles.templateBtn}
+            onPress={() =>
+              navigation.navigate('DietPlanTemplates', {
+                onSelectTemplate: (template: DietTemplate) => {
+                  if (!title.trim() && template.name) setTitle(template.name);
+                  if (template.dailyCalorieTarget) setDailyCalorieTarget(String(template.dailyCalorieTarget));
+                  if (template.dailyWaterGoal) setDailyWaterGoal(String(template.dailyWaterGoal));
+                  if (template.notes) setNotes(template.notes);
+                  if (template.description) setDescription(template.description);
+                  // Yeni id'ler ata
+                  const now = Date.now();
+                  const clonedMeals = template.meals.map((m, mi) => ({
+                    ...m,
+                    id: `${now}_m${mi}`,
+                    foods: m.foods.map((f, fi) => ({ ...f, id: `${now}_f${mi}_${fi}` })),
+                  }));
+                  setMeals(clonedMeals);
+                },
+                currentPlan: {
+                  title, description, dailyCalorieTarget: dailyCalorieTarget ? Number(dailyCalorieTarget) : undefined,
+                  dailyWaterGoal: dailyWaterGoal ? Number(dailyWaterGoal) : undefined, meals, notes,
+                },
+              })
+            }
+          >
+            <Text style={styles.templateBtnText}>📂 Şablondan Yükle</Text>
+          </TouchableOpacity>
 
           {/* Temel Bilgiler */}
           <Text style={styles.sectionTitle}>📋 Plan Bilgileri</Text>
@@ -278,7 +346,7 @@ export default function CreateDietPlanScreen({ route, navigation }: any) {
             keyboardType="number-pad"
           />
 
-          <Text style={styles.label}>Günlük Su Hedefi (Litre)</Text>
+          <Text style={styles.label}>Günlük Su Hedefi (Litre) *</Text>
           <TouchableOpacity
             style={styles.pickerButton}
             onPress={() => {
@@ -382,7 +450,12 @@ export default function CreateDietPlanScreen({ route, navigation }: any) {
               </Text>
               {dailyCalorieTarget && (
                 <Text style={styles.summaryCalories}>
-                  Hedef Kalori: {dailyCalorieTarget} kcal
+                  🔥 Hedef Kalori: {dailyCalorieTarget} kcal
+                </Text>
+              )}
+              {dailyWaterGoal && (
+                <Text style={styles.summaryCalories}>
+                  💧 Su Hedefi: {dailyWaterGoal} L
                 </Text>
               )}
             </View>
@@ -403,8 +476,23 @@ export default function CreateDietPlanScreen({ route, navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* Kaydet Butonu */}
+      {/* Alt Butonlar */}
       <View style={styles.bottomContainer}>
+        <TouchableOpacity
+          style={styles.templateSaveBtn}
+          onPress={() =>
+            navigation.navigate('DietPlanTemplates', {
+              currentPlan: {
+                title, description,
+                dailyCalorieTarget: dailyCalorieTarget ? Number(dailyCalorieTarget) : undefined,
+                dailyWaterGoal: dailyWaterGoal ? Number(dailyWaterGoal) : undefined,
+                meals, notes,
+              },
+            })
+          }
+        >
+          <Text style={[styles.templateSaveBtnText, { color: colors.primary }]}>📂 Şablon</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
@@ -704,13 +792,43 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: colors.white,
     marginTop: 5,
   },
+  templateBtn: {
+    backgroundColor: colors.cardBackground || '#F8FAFC',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  templateBtnText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
   bottomContainer: {
     padding: 20,
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  templateSaveBtn: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  templateSaveBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   saveButton: {
+    flex: 1,
     backgroundColor: colors.primary,
     padding: 18,
     borderRadius: 12,

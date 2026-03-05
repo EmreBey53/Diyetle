@@ -16,13 +16,17 @@ import {
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { createAppointment } from '../services/appointmentService';
+import { generateJitsiRoomUrl } from '../services/videoCallService';
 import { getDietitianPatients } from '../services/firestoreService';
 import { getCurrentUser } from '../services/authService';
+import { sendAppointmentReminderEmail } from '../services/emailService';
+import { isEmailNotificationEnabled } from '../services/notificationSettingsService';
 
 interface Patient {
   id: string;
   name: string;
   phone?: string;
+  email?: string;
 }
 
 interface TimeSlot {
@@ -143,8 +147,12 @@ export default function CreateAppointmentScreen({ route, navigation }: any) {
 
     setLoading(true);
     try {
-      const finalMeetingLink = meetingType === 'app' 
-        ? `diyetle://video-call/${selectedPatient!.id}` 
+      // App tipi icin benzersiz Jitsi room URL olustur
+      const jitsiRoomId = meetingType === 'app'
+        ? `diyetle-apt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`
+        : null;
+      const finalMeetingLink = meetingType === 'app'
+        ? generateJitsiRoomUrl(jitsiRoomId!)
         : meetingLink;
 
       await createAppointment(
@@ -161,7 +169,24 @@ export default function CreateAppointmentScreen({ route, navigation }: any) {
         currentUser.displayName || 'Diyetisyen'
       );
 
-      const successMessage = meetingType === 'app' 
+      // Hastanın e-posta tercihi açıksa randevu bildirimi gönder
+      if (selectedPatient?.email) {
+        try {
+          const emailEnabled = await isEmailNotificationEnabled(selectedPatient.id, 'emailAppointmentReminder');
+          if (emailEnabled) {
+            await sendAppointmentReminderEmail(
+              selectedPatient.email,
+              selectedPatient.name,
+              currentUser.displayName || 'Diyetisyen',
+              selectedDate,
+              selectedTime,
+              meetingType === 'app'
+            );
+          }
+        } catch { /* e-posta opsiyonel, randevu başarıyı etkilemez */ }
+      }
+
+      const successMessage = meetingType === 'app'
         ? 'Randevu başarıyla oluşturuldu. Görüşme uygulama üzerinden yapılacak.'
         : 'Randevu başarıyla oluşturuldu. Meeting linki hasta ile paylaşıldı.';
 

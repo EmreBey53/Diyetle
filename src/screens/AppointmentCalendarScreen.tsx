@@ -58,7 +58,7 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
       setCurrentUser(user);
       
       if (user?.id) {
-        const history = await getAppointmentHistory(user.id, user.role);
+        const history = await getAppointmentHistory(user.id, user.role === 'admin' ? 'patient' : user.role);
         setAppointments(history);
       }
     } catch (error) {

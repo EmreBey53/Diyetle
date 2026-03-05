@@ -1,6 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,14 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Modal,
-  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { registerUser } from '../services/authService';
-import { getAllDietitians } from '../services/firestoreService';
 import { colors } from '../constants/colors';
-import { User, UserRole } from '../models/User';
+import { UserRole } from '../models/User';
+import { sendWelcomeEmailPatient, sendWelcomeEmailDietitian } from '../services/emailService';
 
 export default function RegisterScreen({ navigation }: any) {
   const [displayName, setDisplayName] = useState('');
@@ -28,26 +24,17 @@ export default function RegisterScreen({ navigation }: any) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<UserRole>('patient');
-  const [selectedDietitian, setSelectedDietitian] = useState('');
-  const [dietitians, setDietitians] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showDietitianModal, setShowDietitianModal] = useState(false);
 
-  // Diyetisyenleri yükle
-  const loadDietitians = useCallback(async () => {
-    try {
-      const data = await getAllDietitians();
-      setDietitians(data);
-    } catch (error: any) {
-    }
-  }, []);
-
-  useEffect(() => {
-    loadDietitians();
-  }, [loadDietitians]);
+  // Diyetisyen profil alanları
+  const [specialization, setSpecialization] = useState('');
+  const [bio, setBio] = useState('');
+  const [city, setCity] = useState('');
+  const [experience, setExperience] = useState('');
+  const [sessionFee, setSessionFee] = useState('');
+  const [education, setEducation] = useState('');
 
   const handleRegister = useCallback(async () => {
-    // Validasyon
     if (!displayName || !email || !password || !confirmPassword) {
       Alert.alert('Hata', 'Lütfen tüm alanları doldurun!');
       return;
@@ -63,11 +50,6 @@ export default function RegisterScreen({ navigation }: any) {
       return;
     }
 
-    if (role === 'patient' && !selectedDietitian) {
-      Alert.alert('Hata', 'Lütfen bir diyetisyen seçin!');
-      return;
-    }
-
     setLoading(true);
     try {
       const user = await registerUser(
@@ -75,72 +57,44 @@ export default function RegisterScreen({ navigation }: any) {
         password,
         displayName,
         role,
-        role === 'patient' ? selectedDietitian : undefined,
-        undefined, // weight - Questionnaire'de sorulacak
-        undefined  // height - Questionnaire'de sorulacak
+        undefined,
+        undefined,
+        undefined,
+        role === 'dietitian' ? {
+          specialization: specialization || undefined,
+          bio: bio || undefined,
+          city: city || undefined,
+          experience: experience ? Number(experience) : undefined,
+          sessionFee: sessionFee ? Number(sessionFee) : undefined,
+          education: education || undefined,
+          phone: phone || undefined,
+        } : undefined,
       );
 
-
-      // EĞER PATIENT İSE: Önce KVKK onay ekranına yönlendir
       if (role === 'patient') {
-        Alert.alert('Başarılı!', 'Hesabınız oluşturuldu. KVKK onay ekranına yönlendiriliyorsunuz.', [
+        sendWelcomeEmailPatient(email, displayName, undefined).catch(() => {});
+
+        Alert.alert('Hesabınız Oluşturuldu!', 'Doğrulama e-postası "' + email + '" adresinize gönderildi.\n\nLütfen e-postasınızı onayladıktan sonra giriş yapın.', [
           {
             text: 'Tamam',
             onPress: () => {
               navigation.replace('KVKKConsent', {
                 user: user,
-                selectedDietitianId: selectedDietitian,
+                selectedDietitianId: undefined,
               });
             },
           },
         ]);
       } else {
-        // DIYETISYEN İSE: Direkt giriş yap
-        Alert.alert('Başarılı!', 'Hesabınız oluşturuldu! Giriş yapabilirsiniz.', [
-          {
-            text: 'Tamam',
-            onPress: () => navigation.navigate('Login'),
-          },
-        ]);
+        sendWelcomeEmailDietitian(email, displayName).catch(() => {});
+        navigation.replace('PendingApproval');
       }
     } catch (error: any) {
       Alert.alert('Kayıt Hatası', error.message);
     } finally {
       setLoading(false);
     }
-  }, [displayName, email, password, confirmPassword, role, selectedDietitian, navigation]);
-
-  // Memoized FlatList render function
-  const renderDietitianItem = useCallback(({ item }: { item: User }) => (
-    <TouchableOpacity
-      style={[
-        styles.dietitianItem,
-        selectedDietitian === item.id && styles.dietitianItemSelected,
-      ]}
-      onPress={() => {
-        setSelectedDietitian(item.id);
-        setShowDietitianModal(false);
-      }}
-    >
-      <View style={styles.dietitianItemContent}>
-        <Text style={styles.dietitianItemName}>{item.displayName}</Text>
-        {item.email && (
-          <Text style={styles.dietitianItemEmail}>{item.email}</Text>
-        )}
-      </View>
-      {selectedDietitian === item.id && (
-        <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-      )}
-    </TouchableOpacity>
-  ), [selectedDietitian]);
-
-  const keyExtractor = useCallback((item: User) => item.id, []);
-  const ItemSeparator = useCallback(() => <View style={styles.separator} />, []);
-
-  // Memoized selected dietitian name
-  const selectedDietitianName = useMemo(() => {
-    return dietitians.find((d) => d.id === selectedDietitian)?.displayName;
-  }, [dietitians, selectedDietitian]);
+  }, [displayName, email, password, confirmPassword, role, specialization, bio, city, experience, sessionFee, education, phone, navigation]);
 
   return (
     <KeyboardAvoidingView
@@ -221,41 +175,86 @@ export default function RegisterScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {role === 'patient' && (
-          <View>
-            <Text style={styles.label}>Diyetisyen Seçin</Text>
-
-            <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: 5 }}>
-              Kayıtlı Diyetisyen Sayısı: {dietitians.length}
+        {role === 'dietitian' && (
+          <View style={styles.dietitianProfileSection}>
+            <View style={styles.dietitianProfileHeader}>
+              <Ionicons name="medical" size={20} color={colors.primary} />
+              <Text style={styles.dietitianProfileHeaderText}>Diyetisyen Profil Bilgileri</Text>
+            </View>
+            <Text style={styles.dietitianProfileNote}>
+              Bu bilgiler hastalar tarafından görüntülenecektir. Onaylandıktan sonra değiştirebilirsiniz.
             </Text>
 
-            {dietitians.length === 0 ? (
-              <View style={styles.dietitianSelector}>
-                <Text style={{ padding: 15, color: colors.error, textAlign: 'center' }}>
-                  ⚠️ Sistemde kayıtlı diyetisyen bulunamadı!
-                </Text>
-              </View>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.dietitianSelector}
-                  onPress={() => setShowDietitianModal(true)}
-                >
-                  <Text style={styles.dietitianSelectorText}>
-                    {selectedDietitian
-                      ? selectedDietitianName
-                      : 'Diyetisyen Seçin...'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={24} color={colors.textLight} />
-                </TouchableOpacity>
+            <Text style={styles.label}>Uzmanlık Alanı *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Örn: Sporcu Beslenmesi, Çocuk Diyeti..."
+              placeholderTextColor={colors.textLight}
+              value={specialization}
+              onChangeText={setSpecialization}
+            />
 
-                {selectedDietitian && (
-                  <Text style={styles.selectedDietitianText}>
-                    ✓ {selectedDietitianName}
-                  </Text>
-                )}
-              </>
-            )}
+            <Text style={styles.label}>Eğitim</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Örn: Hacettepe Üniv. Beslenme ve Diyetetik"
+              placeholderTextColor={colors.textLight}
+              value={education}
+              onChangeText={setEducation}
+            />
+
+            <View style={styles.row}>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Şehir</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="İstanbul"
+                  placeholderTextColor={colors.textLight}
+                  value={city}
+                  onChangeText={setCity}
+                />
+              </View>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Deneyim (Yıl)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="5"
+                  placeholderTextColor={colors.textLight}
+                  value={experience}
+                  onChangeText={setExperience}
+                  keyboardType="number-pad"
+                />
+              </View>
+            </View>
+
+            <Text style={styles.label}>Seans Ücreti (TL)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="500"
+              placeholderTextColor={colors.textLight}
+              value={sessionFee}
+              onChangeText={setSessionFee}
+              keyboardType="number-pad"
+            />
+
+            <Text style={styles.label}>Hakkımda</Text>
+            <TextInput
+              style={[styles.input, styles.bioInput]}
+              placeholder="Kendinizi kısaca tanıtın..."
+              placeholderTextColor={colors.textLight}
+              value={bio}
+              onChangeText={setBio}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.approvalInfoBanner}>
+              <Ionicons name="time-outline" size={20} color={colors.warning} />
+              <Text style={styles.approvalInfoText}>
+                Kayıt sonrası hesabınız admin onayına gönderilecektir. Onaylanana kadar sisteme giriş yapılamaz.
+              </Text>
+            </View>
           </View>
         )}
 
@@ -287,35 +286,6 @@ export default function RegisterScreen({ navigation }: any) {
           <Text style={styles.backButtonText}>← Geri Dön</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Diyetisyen Seçim Modal */}
-      <Modal
-        visible={showDietitianModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowDietitianModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Diyetisyen Seçin</Text>
-              <TouchableOpacity onPress={() => setShowDietitianModal(false)}>
-                <Ionicons name="close" size={28} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <FlatList
-              data={dietitians}
-              keyExtractor={keyExtractor}
-              renderItem={renderDietitianItem}
-              ItemSeparatorComponent={ItemSeparator}
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={10}
-              windowSize={5}
-            />
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -355,6 +325,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    color: colors.text,
   },
   label: {
     fontSize: 16,
@@ -388,81 +359,6 @@ const styles = StyleSheet.create({
   },
   roleTextActive: {
     color: colors.white,
-  },
-  dietitianSelector: {
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 15,
-    padding: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  dietitianSelectorText: {
-    fontSize: 16,
-    color: colors.text,
-    flex: 1,
-  },
-  selectedDietitianText: {
-    fontSize: 14,
-    color: colors.primary,
-    marginBottom: 10,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '70%',
-    paddingBottom: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  dietitianItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 15,
-    paddingHorizontal: 20,
-  },
-  dietitianItemSelected: {
-    backgroundColor: colors.primary + '10',
-  },
-  dietitianItemContent: {
-    flex: 1,
-  },
-  dietitianItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  dietitianItemEmail: {
-    fontSize: 14,
-    color: colors.textLight,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: 20,
   },
   registerButton: {
     backgroundColor: colors.primary,
@@ -498,5 +394,55 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: colors.textLight,
     fontSize: 16,
+  },
+  dietitianProfileSection: {
+    marginBottom: 10,
+  },
+  dietitianProfileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  dietitianProfileHeaderText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  dietitianProfileNote: {
+    fontSize: 13,
+    color: colors.textLight,
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  bioInput: {
+    minHeight: 90,
+    paddingTop: 12,
+  },
+  approvalInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.warning + '18',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.warning + '40',
+    padding: 14,
+    gap: 10,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  approvalInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.warning,
+    lineHeight: 19,
   },
 });

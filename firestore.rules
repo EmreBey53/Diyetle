@@ -1,99 +1,318 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection
+
+    // ─── Helper functions ──────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'admin';
+    }
+
+    function isDietitian() {
+      return isSignedIn() && getUserData().role == 'dietitian';
+    }
+
+    function isApprovedDietitian() {
+      return isDietitian() && getUserData().isApproved == true;
+    }
+
+    function isPatient() {
+      return isSignedIn() && getUserData().role == 'patient';
+    }
+
+    // ─── Users ─────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Kendi profilini her zaman okuyabilir (admin login için gerekli)
+      allow read: if isSignedIn() && isOwner(userId);
+      allow read: if isSignedIn() && isAdmin();
+      // Kendi profilini güncelleyebilir (rol değiştirme yasak)
+      allow update: if isSignedIn() && isOwner(userId)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.isApproved == resource.data.isApproved;
+      // Hasta diyetisyen seçimi sırasında dietitianId alanını güncelleyebilir
+      allow update: if isSignedIn() && isOwner(userId)
+        && request.resource.data.role == resource.data.role
+        && ('isApproved' in resource.data
+            ? request.resource.data.isApproved == resource.data.isApproved
+            : true);
+      // Yeni kullanıcı kaydı (register sırasında)
+      allow create: if isSignedIn() && isOwner(userId);
+      // Admin her şeyi yapabilir
+      allow write: if isAdmin();
+      // Diyetisyen kendi hastasının users dokümanını silebilir
+      allow delete: if isApprovedDietitian()
+        && resource.data.dietitianId == request.auth.uid;
+
+      // Hasta kendi diyetisyeninin profilini okuyabilir
+      allow read: if isSignedIn() && isPatient()
+        && getUserData().dietitianId == userId;
+
+      // Diyetisyen kendi hastalarının profillerini okuyabilir
+      allow read: if isApprovedDietitian()
+        && resource.data.dietitianId == request.auth.uid;
+
+      // Diyetisyen reddedilen hastanın dietitianId'sini temizleyebilir
+      allow update: if isApprovedDietitian()
+        && resource.data.dietitianId == request.auth.uid
+        && request.resource.data.role == resource.data.role;
+
+      // Register ekranında diyetisyen listesi sorgusu için herkese açık
+      // (sadece diyetisyen listesi okunur, client-side isApproved filtresi uygulanır)
+      allow list: if true;
+      allow get: if resource.data.role == 'dietitian'
+        && resource.data.isApproved == true;
     }
-    
-    // Patients collection
+
+    // ─── Patients ──────────────────────────────────────────────────────────
     match /patients/{patientId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      // Diyetisyen kendi hastasını okuyabilir/güncelleyebilir
+      allow read, write: if isApprovedDietitian()
+        && resource.data.dietitianId == request.auth.uid;
+      // Hasta kendi kaydını okuyabilir (get + list/query)
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn();
+      // Yeni hasta kaydı oluşturma (register)
+      allow create: if isSignedIn();
+      // Hasta kendi kaydını güncelleyebilir
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
-    
-    // Diet plans collection
+
+    // ─── Diet Plans ────────────────────────────────────────────────────────
     match /dietPlans/{planId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      // Diyetisyen kendi planlarını yönetir (oluşturma + güncelleme)
+      allow read, write: if isApprovedDietitian()
+        && (resource == null || resource.data.dietitianId == request.auth.uid);
+      // Diyetisyen hasta silinirken o hastaya ait planları da silebilir
+      allow delete: if isApprovedDietitian();
+      // Hasta kendi planlarını okur (get) — patientUserId (Auth UID) veya legacy patientId
+      allow get: if isPatient()
+        && (resource.data.patientUserId == request.auth.uid
+            || resource.data.patientId == request.auth.uid);
+      // Hasta kendi planlarını sorgular (list/query)
+      allow list: if isPatient();
     }
-    
-    // Progress collection
+
+    // ─── Progress ──────────────────────────────────────────────────────────
     match /progress/{progressId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+      allow read: if isApprovedDietitian()
+        && resource.data.dietitianId == request.auth.uid;
+      // Diyetisyen hasta silinirken progress verilerini de silebilir
+      allow delete: if isApprovedDietitian();
     }
-    
-    // Questions collection
+
+    // ─── Questions ─────────────────────────────────────────────────────────
     match /questions/{questionId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null
+          || resource.data.patientId == request.auth.uid
+          || resource.data.dietitianId == request.auth.uid);
+      // Diyetisyen hasta silinirken soruları da silebilir
+      allow delete: if isApprovedDietitian();
     }
-    
-    // Chat rooms collection
+
+    // ─── Chat ──────────────────────────────────────────────────────────────
     match /chat_rooms/{roomId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null
+          || resource.data.patientId == request.auth.uid
+          || resource.data.dietitianId == request.auth.uid);
     }
-    
-    // Chat messages collection
+
     match /chat_messages/{messageId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null
+          || resource.data.senderId == request.auth.uid
+          || resource.data.receiverId == request.auth.uid);
     }
-    
-    // Video calls collection
+
+    // ─── Video ─────────────────────────────────────────────────────────────
     match /video_calls/{callId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
-    
-    // Video appointments collection
+
     match /video_appointments/{appointmentId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null
+          || resource.data.patientId == request.auth.uid
+          || resource.data.dietitianId == request.auth.uid);
     }
-    
-    // Appointment slots collection
+
     match /appointment_slots/{slotId} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isApprovedDietitian();
     }
-    
-    // Call sessions collection
+
     match /call_sessions/{sessionId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
-    
-    // Audit logs collection
-    match /audit_logs/{logId} {
-      allow read, write: if request.auth != null;
+
+    // ─── Notifications ─────────────────────────────────────────────────────
+    match /notifications/{notificationId} {
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
     }
-    
-    // KVKK consents collection
-    match /kvkk_consents/{consentId} {
-      allow read, write: if request.auth != null && request.auth.uid == consentId;
-    }
-    
-    // Smart notifications collection
+
     match /smart_notifications/{notificationId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
     }
-    
-    // Push tokens collection
+
     match /push_tokens/{tokenId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn() && isOwner(tokenId);
+      allow read: if isAdmin();
     }
-    
-    // Achievements collection
-    match /achievements/{achievementId} {
-      allow read, write: if request.auth != null;
+
+    // ─── KVKK ──────────────────────────────────────────────────────────────
+    match /kvkk_consents/{consentId} {
+      allow read, write: if isSignedIn() && isOwner(consentId);
+      allow read: if isAdmin();
     }
-    
-    // Data portability requests collection
+
     match /data_portability_requests/{requestId} {
-      allow read, write: if request.auth != null && request.auth.uid == requestId;
+      allow read, write: if isSignedIn() && isOwner(requestId);
+      allow read, write: if isAdmin();
     }
-    
-    // Appointment reminders collection
+
+    // ─── Audit Logs ────────────────────────────────────────────────────────
+    match /audit_logs/{logId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── Appointments ──────────────────────────────────────────────────────
+    // Ana randevu koleksiyonu (appointments)
+    match /appointments/{appointmentId} {
+      allow read, write: if isAdmin();
+      // Diyetisyen kendi randevularını yönetir
+      allow read, write: if isApprovedDietitian()
+        && (resource == null || resource.data.dietitianId == request.auth.uid);
+      // Hasta kendi randevularını okur/iptal eder
+      allow read: if isSignedIn()
+        && resource.data.patientId == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.patientId == request.auth.uid
+        && request.resource.data.status == 'cancelled';
+    }
+
     match /appointment_reminders/{reminderId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null
+          || resource.data.patientId == request.auth.uid
+          || resource.data.dietitianId == request.auth.uid);
     }
-    
-    // Challenges collection
+
+    // ─── Questionnaires ────────────────────────────────────────────────────
+    match /questionnaires/{questionnaireId} {
+      allow read, write: if isAdmin();
+      // Hasta kendi anketini oluşturabilir/okuyabilir/güncelleyebilir
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+      // Diyetisyen kendi hastasının anketini okuyabilir
+      allow read: if isApprovedDietitian()
+        && resource.data.dietitianId == request.auth.uid;
+    }
+
+    // ─── Notification Settings ─────────────────────────────────────────────
+    match /notificationSettings/{userId} {
+      allow read, write: if isSignedIn() && isOwner(userId);
+      allow read: if isAdmin();
+    }
+
+    // ─── App Config ────────────────────────────────────────────────────────
+    match /appConfig/{docId} {
+      allow read: if isSignedIn();   // Tüm kullanıcılar okuyabilir (bakım modu için)
+      allow write: if isAdmin();     // Sadece admin yazabilir
+    }
+
+    // ─── Mail (Firebase Trigger Email Extension) ───────────────────────────
+    match /mail/{mailId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ─── Challenges & Achievements ─────────────────────────────────────────
     match /challenges/{challengeId} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /achievements/{achievementId} {
+      allow read, write: if isAdmin();
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+    }
+
+    // ─── Mood Entries ──────────────────────────────────────────────────────────
+    match /mood_entries/{entryId} {
+      allow read, write: if isAdmin();
+      // Hasta kendi ruh hali verilerini yönetir
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+      // Diyetisyen kendi hastalarının ruh hali verilerini okuyabilir
+      allow read: if isApprovedDietitian();
+    }
+
+    // ─── Exercise Logs ─────────────────────────────────────────────────────────
+    match /exercise_logs/{logId} {
+      allow read, write: if isAdmin();
+      // Hasta kendi egzersiz loglarını yönetir
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
+      // Diyetisyen kendi hastalarının egzersiz loglarını okuyabilir
+      allow read: if isApprovedDietitian();
+    }
+
+    // ─── Meal Photos ───────────────────────────────────────────────────────────
+    match /mealPhotos/{photoId} {
+      allow read, write: if isAdmin();
+      // Hasta kendi fotoğraflarını yükler/okur
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.patientId == request.auth.uid);
+      // Diyetisyen hastalarının fotoğraflarını okur ve yanıt yazabilir
+      allow read: if isApprovedDietitian();
+      allow update: if isApprovedDietitian();
+    }
+
+    // ─── Diet Templates ────────────────────────────────────────────────────────
+    match /diet_templates/{templateId} {
+      allow read, write: if isAdmin();
+      // Diyetisyen kendi şablonlarını yönetir
+      allow read, write: if isApprovedDietitian()
+        && (resource == null || resource.data.dietitianId == request.auth.uid);
+    }
+
+    // ─── Broadcast Notifications ───────────────────────────────────────────────
+    match /notifications/{notifId} {
+      allow read, write: if isAdmin();
+      // Diyetisyen hasta bildirimlerini oluşturabilir
+      allow create: if isApprovedDietitian();
+      // Hasta kendi bildirimlerini okuyabilir/güncelleyebilir (okundu işareti için)
+      allow read, write: if isSignedIn()
+        && (resource == null || resource.data.userId == request.auth.uid);
     }
   }
 }

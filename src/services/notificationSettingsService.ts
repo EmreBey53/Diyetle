@@ -14,6 +14,12 @@ export interface NotificationSettings {
   dailyReminderNotification: boolean;
   appointmentReminderNotification: boolean;
   followUpReminderNotification: boolean;
+  // E-posta bildirimleri
+  emailNotifications: boolean;
+  emailWelcome: boolean;
+  emailAppointmentReminder: boolean;
+  emailDietPlanShared: boolean;
+  emailApprovalStatus: boolean;
 }
 
 const DEFAULT_SETTINGS: Omit<NotificationSettings, 'userId'> = {
@@ -28,6 +34,11 @@ const DEFAULT_SETTINGS: Omit<NotificationSettings, 'userId'> = {
   dailyReminderNotification: false,
   appointmentReminderNotification: true,
   followUpReminderNotification: true,
+  emailNotifications: true,
+  emailWelcome: true,
+  emailAppointmentReminder: true,
+  emailDietPlanShared: true,
+  emailApprovalStatus: true,
 };
 
 export async function getUserNotificationSettings(userId: string): Promise<NotificationSettings> {
@@ -71,6 +82,18 @@ export async function isNotificationEnabled(
     return settings.allNotifications && settings[notificationType];
   } catch (error) {
     return false;
+  }
+}
+
+export async function isEmailNotificationEnabled(
+  userId: string,
+  emailType: 'emailWelcome' | 'emailAppointmentReminder' | 'emailDietPlanShared' | 'emailApprovalStatus'
+): Promise<boolean> {
+  try {
+    const settings = await getUserNotificationSettings(userId);
+    return settings.emailNotifications && settings[emailType];
+  } catch {
+    return true; // Hata durumunda varsayılan olarak gönder
   }
 }
 

@@ -125,14 +125,6 @@ export const startVideoCall = async (callId: string, userId: string, userRole: '
     }
 
     const callData = callDoc.data() as VideoCall;
-    
-    const now = new Date();
-    const scheduledTime = callData.scheduledTime.toDate();
-    const timeDiff = Math.abs(now.getTime() - scheduledTime.getTime()) / (1000 * 60);
-    
-    if (timeDiff > 15) {
-      throw new Error('Görüşme zamanı geçmiş veya henüz gelmemiş');
-    }
 
     await updateDoc(callRef, {
       status: 'ongoing',
@@ -294,11 +286,79 @@ export const getCallHistory = async (userId: string, userRole: 'dietitian' | 'pa
 };
 
 const generateRoomId = (): string => {
-  return `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `diyetle-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
+export const generateJitsiRoomUrl = (roomId: string): string => {
+  return `https://meet.jit.si/${roomId}`;
+};
+
+// Prejoin, reklam ve app yonlendirmesi olmadan direkt konferansa baglanir
+export const generateJitsiEmbedHtml = (roomId: string, displayName: string): string => {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  #meet { width: 100%; height: 100vh; }
+  /* Jitsi watermark ve promo bantlarini gizle */
+  .watermark, .leftwatermark, .rightwatermark,
+  .powered-by, #poweredby, .powered-by-container,
+  [class*="watermark"], [class*="promo"],
+  .mobile-app-promo { display: none !important; }
+</style>
+</head>
+<body>
+<div id="meet"></div>
+<script src="https://meet.jit.si/external_api.js"></script>
+<script>
+  const api = new JitsiMeetExternalAPI('meet.jit.si', {
+    roomName: '${roomId}',
+    parentNode: document.getElementById('meet'),
+    width: '100%',
+    height: '100%',
+    userInfo: { displayName: '${displayName}' },
+    configOverwrite: {
+      prejoinPageEnabled: false,
+      startWithAudioMuted: false,
+      startWithVideoMuted: false,
+      disableDeepLinking: true,
+      enableWelcomePage: false,
+      disableThirdPartyRequests: true,
+      analytics: { disabled: true },
+      callStatsID: false,
+      toolbarButtons: [
+        'microphone', 'camera', 'hangup',
+        'chat', 'raisehand', 'tileview', 'fullscreen'
+      ],
+    },
+    interfaceConfigOverwrite: {
+      SHOW_JITSI_WATERMARK: false,
+      SHOW_WATERMARK_FOR_GUESTS: false,
+      MOBILE_APP_PROMO: false,
+      HIDE_INVITE_MORE_HEADER: true,
+      SHOW_PROMOTIONAL_CLOSE_PAGE: false,
+      SHOW_CHROME_EXTENSION_BANNER: false,
+      GENERATE_ROOMNAMES_ON_WELCOME_PAGE: false,
+      DEFAULT_BACKGROUND: '#000000',
+      TOOLBAR_ALWAYS_VISIBLE: false,
+    },
+  });
+  api.addEventListener('readyToClose', function() {
+    window.ReactNativeWebView && window.ReactNativeWebView.postMessage('CALL_ENDED');
+  });
+  api.addEventListener('videoConferenceLeft', function() {
+    window.ReactNativeWebView && window.ReactNativeWebView.postMessage('CALL_ENDED');
+  });
+</script>
+</body>
+</html>`;
 };
 
 const generateAccessToken = async (roomId: string, userId: string, role: string): Promise<string> => {
-  // In production: fetch token from WebRTC signaling server
   return `token_${roomId}_${userId}_${role}_${Date.now()}`;
 };
 
@@ -313,6 +373,21 @@ const sendCallNotifications = async (callId: string, dietitianId: string, patien
     await sendEmergencyNotification(
       patientId,
       `📹 Diyetisyeninizle video görüşmeniz ${timeStr} tarihinde planlandı`,
+      'high'
+    );
+  } catch (error) {
+  }
+};
+
+export const sendVideoCallStartedNotification = async (
+  patientId: string,
+  dietitianName: string,
+  roomId: string
+) => {
+  try {
+    await sendEmergencyNotification(
+      patientId,
+      `📹 ${dietitianName} sizi video görüşmeye davet ediyor! Randevular sekmesinden katılabilirsiniz.`,
       'high'
     );
   } catch (error) {

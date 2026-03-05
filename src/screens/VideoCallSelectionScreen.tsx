@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { getCurrentUser } from '../services/authService';
 import { getDietitianPatients } from '../services/firestoreService';
-import { createVideoCall } from '../services/videoCallService';
+import { createVideoCall, sendVideoCallStartedNotification } from '../services/videoCallService';
 
 interface Patient {
   id: string;
@@ -93,10 +93,16 @@ export default function VideoCallSelectionScreen({ navigation }: any) {
                 30 // 30 dakika
               );
 
+              // Hastaya bildirim gonder
+              await sendVideoCallStartedNotification(
+                patient.id,
+                currentUser.displayName || 'Diyetisyen',
+                videoCall.roomId || ''
+              );
+
               // Video call ekranına git
               navigation.navigate('VideoCall', {
                 callId: videoCall.id,
-                appointmentId: `instant-${Date.now()}`,
                 participantName: patient.name,
                 patientId: patient.id,
                 isInstantCall: true

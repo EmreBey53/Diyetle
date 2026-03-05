@@ -77,13 +77,13 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unansweredCount, setUnansweredCount] = useState(0);
+  const [pendingPatientCount, setPendingPatientCount] = useState(0);
   const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
   const [activities, setActivities] = useState<Activity[]>([]);
   const [notificationPanelVisible, setNotificationPanelVisible] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [patientChartData, setPatientChartData] = useState<ChartData>({ labels: [], datasets: [{ data: [] }] });
   const [bmiChartData, setBmiChartData] = useState<ChartData>({ labels: [], datasets: [{ data: [] }] });
-
   // Render avatar helper
   const renderAvatar = () => {
     if (user?.profileEmoji) {
@@ -152,18 +152,20 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
         await syncPatientsFromUsers(currentUser.id);
 
         // Load ALL data in parallel for maximum performance
-        const [dashboardData, questions, recentActivities, patientTrend, bmiTrend] = await Promise.all([
+        const [dashboardData, questions, recentActivities, patientTrend, bmiTrend, pendingList] = await Promise.all([
           getDashboardStats(currentUser.id),
           getQuestionsByDietitian(currentUser.id).catch(() => []),
           getRecentActivities(currentUser.id).catch(() => []),
           getPatientAdditionTrend(currentUser.id, viewMode).catch(() => ({ labels: [], data: [0] })),
           getBMITrend(currentUser.id, viewMode).catch(() => ({ labels: [], data: [0] })),
+          import('../services/patientService').then(m => m.getPendingPatients(currentUser.id)).catch(() => []),
         ]);
 
         // Set all states at once to minimize re-renders
         setStats(dashboardData);
         setActivities(recentActivities);
         setUnansweredCount(questions.filter((q: any) => !q.isAnswered).length);
+        setPendingPatientCount(pendingList.length);
 
         // NaN ve Infinity değerlerini filtrele
         const sanitizeData = (data: number[]) => data.map(v =>
@@ -380,11 +382,12 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
             <QuickActionCard
               icon="people-outline"
               title="Danışanlar"
-              subtitle="Listeyi Görüntüle"
+              subtitle={pendingPatientCount > 0 ? `${pendingPatientCount} onay bekliyor` : "Listeyi Görüntüle"}
               color="#3B82F6"
               onPress={() => navigation.navigate('PatientsList')}
+              badge={pendingPatientCount > 0 ? pendingPatientCount : undefined}
               textColor={colors.text}
-              subtitleColor={colors.textLight}
+              subtitleColor={pendingPatientCount > 0 ? '#F59E0B' : colors.textLight}
               cardBackground={colors.cardBackground}
             />
             <QuickActionCard
@@ -434,6 +437,26 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
               subtitle="Danışanlarla Chat"
               color="#10B981"
               onPress={() => navigation.navigate('ChatSelection')}
+              textColor={colors.text}
+              subtitleColor={colors.textLight}
+              cardBackground={colors.cardBackground}
+            />
+            <QuickActionCard
+              icon="megaphone-outline"
+              title="Toplu Mesaj"
+              subtitle="Tüm Hastalara"
+              color="#EC4899"
+              onPress={() => navigation.navigate('BroadcastMessage')}
+              textColor={colors.text}
+              subtitleColor={colors.textLight}
+              cardBackground={colors.cardBackground}
+            />
+            <QuickActionCard
+              icon="copy-outline"
+              title="Plan Şablonları"
+              subtitle="Hazır Planlar"
+              color="#6366F1"
+              onPress={() => navigation.navigate('DietPlanTemplates')}
               textColor={colors.text}
               subtitleColor={colors.textLight}
               cardBackground={colors.cardBackground}
@@ -599,6 +622,7 @@ const DietitianHomeScreen = forwardRef(({ navigation }: any, ref) => {
           }
         }}
       />
+
     </View>
   );
 });

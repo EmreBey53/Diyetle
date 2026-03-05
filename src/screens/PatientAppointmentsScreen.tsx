@@ -13,11 +13,12 @@ import {
   Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getPatientAppointments } from '../services/appointmentService';
+import { getPatientAppointments, cancelAppointment } from '../services/appointmentService';
 import { getCurrentUser } from '../services/authService';
 import { Appointment } from '../models/Appointment';
+import EmptyState from '../components/EmptyState';
 
-export default function PatientAppointmentsScreen() {
+export default function PatientAppointmentsScreen({ navigation }: any) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,16 +63,33 @@ export default function PatientAppointmentsScreen() {
     setRefreshing(false);
   };
 
-  const handleOpenMeetingLink = async (url: string) => {
-    try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Linkini Kopyala', url);
+  const handleOpenMeetingLink = async (appointment: Appointment) => {
+    const { meetingLink, meetingType, id, dietitianName } = appointment;
+
+    if (meetingType === 'app' || meetingLink?.startsWith('https://meet.jit.si/')) {
+      // Jitsi URL'sinden roomId cikar
+      const roomId = meetingLink?.startsWith('https://meet.jit.si/')
+        ? meetingLink.replace('https://meet.jit.si/', '')
+        : undefined;
+      setShowDetailModal(false);
+      navigation.navigate('VideoCall', {
+        callId: id,
+        roomId,
+        participantName: dietitianName,
+        isInstantCall: false,
+      });
+    } else if (meetingLink) {
+      // Harici link
+      try {
+        const canOpen = await Linking.canOpenURL(meetingLink);
+        if (canOpen) {
+          await Linking.openURL(meetingLink);
+        } else {
+          Alert.alert('Link', meetingLink);
+        }
+      } catch {
+        Alert.alert('Hata', 'Link açılamadı');
       }
-    } catch (error) {
-      Alert.alert('Hata', 'Link açılırken hata oluştu');
     }
   };
 
@@ -83,6 +101,32 @@ export default function PatientAppointmentsScreen() {
       });
     } catch (error) {
     }
+  };
+
+  const handleCancelAppointment = (appointment: Appointment) => {
+    Alert.alert(
+      'Randevu İptal Edilsin mi?',
+      `${appointment.date} tarihindeki randevunuzu iptal etmek istediğinizden emin misiniz?`,
+      [
+        { text: 'Hayır', style: 'cancel' },
+        {
+          text: 'Evet, İptal Et',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelAppointment(appointment.id);
+              Alert.alert('Başarılı', 'Randevunuz iptal edildi.');
+              setShowDetailModal(false);
+              if (currentUser?.id) {
+                await loadAppointments(currentUser.id);
+              }
+            } catch (error) {
+              Alert.alert('Hata', 'Randevu iptal edilirken hata oluştu.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const now = Date.now();
@@ -190,19 +234,11 @@ export default function PatientAppointmentsScreen() {
           <ActivityIndicator size="large" color="#65C18C" />
         </View>
       ) : displayedAppointments.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={64} color="#ddd" />
-          <Text style={styles.emptyText}>
-            {selectedTab === 'upcoming'
-              ? 'Yaklaşan randevu bulunmamaktadır'
-              : 'Geçmiş randevu bulunmamaktadır'}
-          </Text>
-          {selectedTab === 'upcoming' && (
-            <Text style={styles.emptySubtext}>
-              Diyetisyeninizle iletişime geçerek randevu talep ediniz
-            </Text>
-          )}
-        </View>
+        <EmptyState
+          icon="calendar-outline"
+          title={selectedTab === 'upcoming' ? 'Yaklaşan randevu yok' : 'Geçmiş randevu yok'}
+          subtitle={selectedTab === 'upcoming' ? 'Diyetisyeninizle iletişime geçerek randevu talep edebilirsiniz.' : undefined}
+        />
       ) : (
         <FlatList
           data={displayedAppointments}
@@ -279,9 +315,7 @@ export default function PatientAppointmentsScreen() {
                   <Text style={styles.detailSectionTitle}>Meeting Linki</Text>
                   <TouchableOpacity
                     style={styles.meetingLinkButton}
-                    onPress={() =>
-                      handleOpenMeetingLink(selectedAppointment.meetingLink)
-                    }
+                    onPress={() => handleOpenMeetingLink(selectedAppointment)}
                   >
                     <Ionicons name="link" size={20} color="#fff" />
                     <Text style={styles.meetingLinkButtonText}>
@@ -310,6 +344,17 @@ export default function PatientAppointmentsScreen() {
                     <Ionicons name="share-social" size={20} color="#65C18C" />
                     <Text style={styles.shareButtonText}>Paylaş</Text>
                   </TouchableOpacity>
+
+                  {selectedAppointment.status === 'scheduled' &&
+                    selectedAppointment.startDateTime > Date.now() && (
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={() => handleCancelAppointment(selectedAppointment)}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#ff6b6b" />
+                      <Text style={styles.cancelButtonText}>İptal Et</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {selectedAppointment.status === 'cancelled' && (
@@ -394,6 +439,8 @@ const styles = StyleSheet.create({
   actionButtons: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 16 },
   shareButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#65C18C', borderRadius: 8, paddingVertical: 12, gap: 8 },
   shareButtonText: { fontSize: 14, fontWeight: '600', color: '#65C18C' },
+  cancelButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffe0e0', borderRadius: 8, paddingVertical: 12, gap: 8 },
+  cancelButtonText: { fontSize: 14, fontWeight: '600', color: '#ff6b6b' },
   cancelledInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 16, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: '#ffe0e0', borderRadius: 8 },
   cancelledText: { fontSize: 13, color: '#ff6b6b', fontWeight: '600' },
 });

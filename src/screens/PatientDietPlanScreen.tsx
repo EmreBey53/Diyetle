@@ -66,7 +66,9 @@ export default function PatientDietPlanScreen({ navigation }: any) {
       const expired = await getExpiredDietPlans(profile.id!);
       setExpiredDiets(expired);
     } catch (error: any) {
-      Alert.alert('Hata', error.message);
+      // Hata durumunda boş state göster (izin hatası veya plan yoksa)
+      setActiveDietPlan(null);
+      setExpiredDiets([]);
     } finally {
       setLoading(false);
     }
@@ -161,11 +163,23 @@ export default function PatientDietPlanScreen({ navigation }: any) {
         </View>
       </View>
 
-      {/* Kalori Hedefi */}
-      {diet.dailyCalorieTarget && (
-        <View style={styles.calorieInfo}>
-          <Text style={styles.calorieLabel}>Günlük Hedef:</Text>
-          <Text style={styles.calorieValue}>{diet.dailyCalorieTarget} kcal</Text>
+      {/* Kalori & Su Hedefi */}
+      {(diet.dailyCalorieTarget || diet.dailyWaterGoal) && (
+        <View style={styles.goalsRow}>
+          {diet.dailyCalorieTarget && (
+            <View style={[styles.goalCard, styles.calorieCard]}>
+              <Text style={styles.goalEmoji}>🔥</Text>
+              <Text style={styles.goalValue}>{diet.dailyCalorieTarget}</Text>
+              <Text style={styles.goalLabel}>kcal / gün</Text>
+            </View>
+          )}
+          {diet.dailyWaterGoal && (
+            <View style={[styles.goalCard, styles.waterCard]}>
+              <Text style={styles.goalEmoji}>💧</Text>
+              <Text style={styles.goalValue}>{diet.dailyWaterGoal} L</Text>
+              <Text style={styles.goalLabel}>su / gün</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -225,11 +239,17 @@ export default function PatientDietPlanScreen({ navigation }: any) {
   if (!activeDietPlan && expiredDiets.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.emptyEmoji}>📋</Text>
-        <Text style={styles.emptyText}>Henüz Diyet Planınız Yok</Text>
+        <Text style={styles.emptyEmoji}>🥗</Text>
+        <Text style={styles.emptyText}>Diyet Planınız Hazırlanıyor</Text>
         <Text style={styles.emptySubtext}>
-          Diyetisyeniniz size bir plan oluşturduğunda burada görünecek
+          Diyetisyeniniz sizin için kişisel bir diyet planı hazırlayacak. Plan hazır olduğunda burada görünecek.
         </Text>
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+          <Text style={styles.infoBoxText}>
+            Yeni sorularınız veya notlarınız için mesaj bölümünü kullanabilirsiniz.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -296,6 +316,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textLight,
     textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.primary + '15',
+    borderRadius: 10,
+    padding: 14,
+    gap: 10,
+    maxWidth: 320,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  infoBoxText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 20,
   },
   section: {
     padding: 15,
@@ -378,23 +417,38 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '500',
   },
-  calorieInfo: {
+  goalsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    padding: 10,
-    borderRadius: 8,
+    gap: 10,
     marginBottom: 12,
-    gap: 8,
   },
-  calorieLabel: {
-    fontSize: 13,
+  goalCard: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 2,
+  },
+  calorieCard: {
+    backgroundColor: '#FFF3E0',
+  },
+  waterCard: {
+    backgroundColor: '#E3F2FD',
+  },
+  goalEmoji: {
+    fontSize: 22,
+    marginBottom: 2,
+  },
+  goalValue: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  goalLabel: {
+    fontSize: 11,
     color: colors.textLight,
-  },
-  calorieValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.primary,
+    fontWeight: '500',
   },
   mealsContainer: {
     marginBottom: 12,

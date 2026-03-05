@@ -1,4 +1,4 @@
-export type UserRole = 'dietitian' | 'patient';
+export type UserRole = 'dietitian' | 'patient' | 'admin';
 
 export interface User {
   id: string; // Firebase Auth UID
@@ -26,6 +26,15 @@ export interface User {
   height?: number;
   bmi?: number;
   gender?: 'male' | 'female';
+
+  // Diyetisyen profil alanları
+  isApproved?: boolean;        // Admin onayı (false = beklemede, true = onaylı)
+  specialization?: string;     // Uzmanlık alanı
+  bio?: string;                // Kısa biyografi
+  city?: string;               // Şehir
+  experience?: number;         // Deneyim yılı
+  sessionFee?: number;         // Seans ücreti (TL)
+  education?: string;          // Eğitim bilgisi
 }
 
 // BMI hesaplama

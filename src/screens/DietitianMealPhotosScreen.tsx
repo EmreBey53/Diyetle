@@ -62,8 +62,11 @@ export default function DietitianMealPhotosScreen({ route, navigation }: any) {
       setLoading(true);
       const photosList = await getDietitianPatientPhotos(dietitianId, patientId);
       setPhotos(photosList);
-    } catch (error) {
-      Alert.alert('Hata', 'Fotoğraflar yüklenirken hata oluştu');
+    } catch (error: any) {
+      // "permission-denied" → kuralda sorun; diğer hatalar sessizce geç (boş koleksiyon normal)
+      if (error?.code === 'permission-denied') {
+        Alert.alert('Hata', 'Fotoğraflara erişim izni yok.');
+      }
     } finally {
       setLoading(false);
     }
@@ -185,6 +188,7 @@ export default function DietitianMealPhotosScreen({ route, navigation }: any) {
                   style={styles.photoCard}
                   onPress={() => {
                     setSelectedPhoto(item);
+                    setResponseText('');
                     setShowPhotoDetail(true);
                   }}
                 >
@@ -193,6 +197,12 @@ export default function DietitianMealPhotosScreen({ route, navigation }: any) {
                     style={styles.photoImage}
                     resizeMode="cover"
                   />
+                  {/* Yanıt bekleniyor badge */}
+                  {!item.dietitianResponse && (
+                    <View style={styles.pendingBadge}>
+                      <Text style={styles.pendingBadgeText}>Yanıt Bekliyor</Text>
+                    </View>
+                  )}
                   <View style={styles.photoOverlay}>
                     <View style={styles.photoInfo}>
                       <Text style={styles.photoMealType}>
@@ -310,8 +320,8 @@ export default function DietitianMealPhotosScreen({ route, navigation }: any) {
                     </View>
                   )}
 
-                  {/* Response Input Section - Only show if there's a message and no response yet */}
-                  {selectedPhoto.notes && !selectedPhoto.dietitianResponse && (
+                  {/* Response Input Section - Yanıt verilmemişse her fotoğrafa cevap verilebilir */}
+                  {!selectedPhoto.dietitianResponse && (
                     <View style={styles.responseInputBox}>
                       <Text style={styles.responseInputLabel}>📝 Danışana Cevap Gönder:</Text>
                       <TextInput
@@ -500,6 +510,22 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#f0f0f0',
     marginBottom: 8,
+    position: 'relative',
+  },
+  pendingBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  pendingBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#fff',
   },
   photoImage: {
     width: '100%',

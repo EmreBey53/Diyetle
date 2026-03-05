@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,13 +10,42 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { auth, db } from '../firebaseConfig';
 import { loginUser } from '../services/authService';
 import { colors } from '../constants/colors';
+
+const REMEMBER_EMAIL_KEY = '@diyetle_remember_email';
+const REMEMBER_FLAG_KEY = '@diyetle_remember_me';
+const AUTOLOGIN_KEY = '@diyetle_autologin';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+
+  useEffect(() => {
+    loadSavedEmail();
+  }, []);
+
+  const loadSavedEmail = async () => {
+    try {
+      const savedFlag = await AsyncStorage.getItem(REMEMBER_FLAG_KEY);
+      if (savedFlag === 'true') {
+        const savedEmail = await AsyncStorage.getItem(REMEMBER_EMAIL_KEY);
+        if (savedEmail) {
+          setEmail(savedEmail);
+          setRememberMe(true);
+        }
+      }
+    } catch {}
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -28,16 +57,120 @@ export default function LoginScreen({ navigation }: any) {
     try {
       const user = await loginUser(email, password);
 
+      if (rememberMe) {
+        await AsyncStorage.setItem(REMEMBER_EMAIL_KEY, email);
+        await AsyncStorage.setItem(REMEMBER_FLAG_KEY, 'true');
+        await AsyncStorage.setItem(AUTOLOGIN_KEY, 'true');
+      } else {
+        await AsyncStorage.removeItem(REMEMBER_EMAIL_KEY);
+        await AsyncStorage.setItem(REMEMBER_FLAG_KEY, 'false');
+        await AsyncStorage.removeItem(AUTOLOGIN_KEY);
+      }
+
       if (user.role === 'dietitian') {
         navigation.replace('DietitianHome');
       } else {
         navigation.replace('PatientHome');
       }
     } catch (error: any) {
-      Alert.alert('Giriş Hatası', error.message);
+      if (error.code === 'auth/pending-approval') {
+        navigation.replace('PendingApproval');
+      } else if (error.code === 'auth/email-not-verified') {
+        Alert.alert(
+          'E-posta Doğrulaması Gerekli',
+          'Hesabınızı aktif edebilmek için e-posta adresinizi doğrulamanız gerekiyor.\n\nOnay e-postasını tekrar gönderelim mi?',
+          [
+            { text: 'Hayır', style: 'cancel' },
+            {
+              text: 'Yeniden Gönder',
+              onPress: async () => {
+                try {
+                  const { signInWithEmailAndPassword, signOut } = await import('firebase/auth');
+                  const cred = await signInWithEmailAndPassword(auth, email, password);
+                  await sendEmailVerification(cred.user);
+                  await signOut(auth);
+                  Alert.alert('Gönderildi', 'Doğrulama e-postası gönderildi. Lütfen e-postasınızı kontrol edin.');
+                } catch {
+                  Alert.alert('Hata', 'E-posta gönderilemedi. Lütfen tekrar deneyin.');
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        const newAttempts = failedAttempts + 1;
+        setFailedAttempts(newAttempts);
+
+        if (newAttempts >= 3 && email.trim()) {
+          Alert.alert(
+            'Giriş Hatası',
+            `${error.message}\n\nArt arda ${newAttempts} kez yanlış giriş yaptınız. Şifrenizi sıfırlamak ister misiniz?`,
+            [
+              { text: 'Hayır', style: 'cancel' },
+              {
+                text: 'Şifremi Sıfırla',
+                onPress: async () => {
+                  try {
+                    await sendResetEmail(email);
+                    setFailedAttempts(0);
+                  } catch {
+                    Alert.alert('Hata', 'E-posta gönderilemedi. Lütfen tekrar deneyin.');
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert('Giriş Hatası', error.message);
+        }
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const sendResetEmail = async (targetEmail: string) => {
+    // Firestore'da mail kayıtlı mı kontrol et
+    const snap = await getDocs(query(collection(db, 'users'), where('email', '==', targetEmail.trim())));
+    if (snap.empty) {
+      Alert.alert('Hata', 'Bu e-posta adresiyle kayıtlı hesap bulunamadı.');
+      return;
+    }
+    await sendPasswordResetEmail(auth, targetEmail.trim());
+    Alert.alert(
+      'E-posta Gönderildi',
+      `Şifre sıfırlama bağlantısı "${targetEmail}" adresine gönderildi. Gelen kutunuzu ve spam klasörünüzü kontrol edin.`,
+      [{ text: 'Tamam' }]
+    );
+  };
+
+  const handleForgotPassword = () => {
+    if (!email.trim()) {
+      Alert.alert(
+        'Şifremi Unuttum',
+        'Lütfen önce e-posta adresinizi girin, ardından "Şifremi Unuttum?" butonuna basın.',
+        [{ text: 'Tamam' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Şifremi Unuttum',
+      `"${email}" adresine şifre sıfırlama bağlantısı gönderilsin mi?`,
+      [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Gönder',
+          onPress: async () => {
+            try {
+              await sendResetEmail(email);
+            } catch {
+              Alert.alert('Hata', 'E-posta gönderilemedi. Lütfen tekrar deneyin.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -50,26 +183,54 @@ export default function LoginScreen({ navigation }: any) {
         <Text style={styles.title}>Giriş Yap</Text>
         <Text style={styles.subtitle}>Diyetle hesabınıza giriş yapın</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="E-posta"
-          placeholderTextColor={colors.textLight}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <View style={styles.inputWrap}>
+          <Ionicons name="mail-outline" size={18} color={colors.textLight} style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="E-posta"
+            placeholderTextColor={colors.textLight}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Şifre"
-          placeholderTextColor={colors.textLight}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+        <View style={styles.inputWrap}>
+          <Ionicons name="lock-closed-outline" size={18} color={colors.textLight} style={styles.inputIcon} />
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Şifre"
+            placeholderTextColor={colors.textLight}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textLight} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Remember Me */}
+        <TouchableOpacity
+          style={styles.rememberRow}
+          onPress={() => setRememberMe(!rememberMe)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+            {rememberMe && <Ionicons name="checkmark" size={13} color="#fff" />}
+          </View>
+          <Text style={styles.rememberLabel}>Beni hatırla</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.forgotButton}
+          onPress={handleForgotPassword}
+        >
+          <Text style={styles.forgotText}>Şifremi Unuttum?</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.loginButton, loading && styles.buttonDisabled]}
@@ -131,21 +292,53 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     marginBottom: 40,
   },
-  input: {
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.background,
-    padding: 15,
     borderRadius: 10,
     marginBottom: 15,
-    fontSize: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    paddingHorizontal: 12,
+  },
+  inputIcon: { marginRight: 8 },
+  input: {
+    flex: 1,
+    paddingVertical: 15,
+    fontSize: 16,
+    color: colors.text,
+  },
+  eyeBtn: { padding: 4 },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  checkboxActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  rememberLabel: {
+    fontSize: 15,
+    color: colors.text,
   },
   loginButton: {
     backgroundColor: colors.primary,
     padding: 18,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10,
   },
   buttonDisabled: {
     backgroundColor: colors.textLight,
@@ -166,6 +359,15 @@ const styles = StyleSheet.create({
   linkBold: {
     color: colors.primary,
     fontWeight: 'bold',
+  },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 16,
+  },
+  forgotText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   backButton: {
     marginTop: 20,

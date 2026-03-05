@@ -15,8 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
 import { getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
+import { getAppConfig, AppConfig } from '../services/appConfigService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -70,43 +72,78 @@ export default function WelcomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  const tapCount = useRef(0);
+  const lastTapTime = useRef(0);
+
+  const handleLogoPress = () => {
+    const now = Date.now();
+    if (now - lastTapTime.current > 2000) {
+      tapCount.current = 0;
+    }
+    lastTapTime.current = now;
+    tapCount.current += 1;
+    if (tapCount.current >= 5) {
+      tapCount.current = 0;
+      navigation.navigate('AdminLogin');
+    }
+  };
 
   useEffect(() => {
-    const checkAutoLogin = async () => {
+    getAppConfig().then(setAppConfig).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const initAuth = async () => {
       try {
-        
-        // Onboarding'in gösterilip gösterilmediğini kontrol et
         const onboardingCompleted = await AsyncStorage.getItem('onboardingCompleted');
-        
-        if (onboardingCompleted === 'true') {
-          const firebaseUser = auth.currentUser;
-          if (firebaseUser) {
-            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              if (userData.role === 'dietitian') {
-                navigation.replace('DietitianHome');
-              } else {
-                navigation.replace('PatientHome');
-              }
-              return;
-            }
-          }
-          setShowOnboarding(false);
-          setLoading(false);
-        } else {
+
+        if (onboardingCompleted !== 'true') {
           setShowOnboarding(true);
           setLoading(false);
+          return;
         }
-      } catch (error) {
+
+        // Onboarding tamamlanmışsa — auth durumu hazır olana kadar bekle
+        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          try {
+            if (firebaseUser) {
+              // Firebase oturumu var — beni hatırla flag'ini kontrol et
+              const autoLogin = await AsyncStorage.getItem('@diyetle_autologin');
+              if (autoLogin === 'true') {
+                const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+                if (userDoc.exists()) {
+                  const userData = userDoc.data();
+                  if (userData.role === 'dietitian') {
+                    navigation.replace('DietitianHome');
+                  } else {
+                    navigation.replace('PatientHome');
+                  }
+                  return;
+                }
+              }
+            }
+          } catch {}
+          // Otomatik giriş yapılamadı — giriş/kayıt ekranını göster
+          setShowOnboarding(false);
+          setLoading(false);
+          if (unsubscribe) unsubscribe();
+        });
+      } catch {
         setShowOnboarding(true);
         setLoading(false);
       }
     };
 
-    checkAutoLogin();
+    initAuth();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [navigation]);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -298,11 +335,32 @@ export default function WelcomeScreen({ navigation }: any) {
     );
   }
 
+  // Bakım modu
+  if (appConfig?.maintenanceMode) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={{ fontSize: 48 }}>🔧</Text>
+        <Text style={[styles.title, { textAlign: 'center', marginTop: 16 }]}>Bakım Modu</Text>
+        <Text style={[styles.loadingText, { textAlign: 'center', marginTop: 8, paddingHorizontal: 32 }]}>
+          {appConfig.maintenanceMessage}
+        </Text>
+      </View>
+    );
+  }
+
   // Login/Register seçim ekranı
   return (
     <View style={styles.container}>
+      {appConfig?.announcementBanner ? (
+        <View style={[styles.announcementBanner, { backgroundColor: appConfig.announcementColor || '#3B82F6' }]}>
+          <Ionicons name="megaphone-outline" size={16} color={colors.white} />
+          <Text style={styles.announcementText}>{appConfig.announcementBanner}</Text>
+        </View>
+      ) : null}
       <View style={styles.content}>
-        <Text style={styles.logo}>🥗</Text>
+        <TouchableOpacity onPress={handleLogoPress} activeOpacity={1}>
+          <Text style={styles.logo}>🥗</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Diyetle</Text>
         <Text style={styles.subtitle}>Sağlıklı Yaşam Asistanınız</Text>
         <TouchableOpacity
@@ -312,10 +370,15 @@ export default function WelcomeScreen({ navigation }: any) {
           <Text style={styles.primaryButtonText}>Giriş Yap</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Register')}
+          style={[styles.secondaryButton, appConfig?.registrationEnabled === false && styles.buttonDisabledOpacity]}
+          onPress={() => {
+            if (appConfig?.registrationEnabled === false) return;
+            navigation.navigate('Register');
+          }}
         >
-          <Text style={styles.secondaryButtonText}>Kayıt Ol</Text>
+          <Text style={styles.secondaryButtonText}>
+            {appConfig?.registrationEnabled === false ? 'Kayıt Geçici Kapalı' : 'Kayıt Ol'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -326,6 +389,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.primary,
+  },
+  announcementBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  announcementText: {
+    flex: 1,
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  buttonDisabledOpacity: {
+    opacity: 0.5,
   },
   onboardingContainer: {
     flex: 1,

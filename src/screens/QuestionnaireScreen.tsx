@@ -136,8 +136,13 @@ export default function QuestionnaireScreen({
       return;
     }
 
-    if (!user || !selectedDietitianId) {
+    if (!user) {
       Alert.alert('Hata', 'Kullanıcı bilgileri eksik. Lütfen tekrar giriş yapın.');
+      return;
+    }
+
+    if (!selectedDietitianId) {
+      navigation.replace('SelectDietitian', { user, nextScreen: 'Questionnaire' });
       return;
     }
 

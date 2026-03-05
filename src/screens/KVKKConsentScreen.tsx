@@ -55,11 +55,19 @@ export default function KVKKConsentScreen({ navigation, route }: KVKKConsentScre
         consentVersion: '1.0',
       });
 
-      // Questionnaire ekranına yönlendir
-      navigation.replace('Questionnaire', {
-        user: user,
-        selectedDietitianId: selectedDietitianId,
-      });
+      if (selectedDietitianId) {
+        // Diyetisyen zaten seçilmiş → direkt Questionnaire'e git
+        navigation.replace('Questionnaire', {
+          user: user,
+          selectedDietitianId: selectedDietitianId,
+        });
+      } else {
+        // Diyetisyen seçilmemiş → önce diyetisyen seçim ekranı
+        navigation.replace('SelectDietitian', {
+          user: user,
+          nextScreen: 'Questionnaire',
+        });
+      }
     } catch (error: any) {
       Alert.alert('Hata', 'KVKK onayı kaydedilirken bir hata oluştu.');
     } finally {

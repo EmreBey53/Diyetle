@@ -5,47 +5,44 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Dimensions,
   StatusBar,
-  Modal,
+  ActivityIndicator,
+  Share,
+  Linking,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
-import { startVideoCall, endVideoCall, startScreenShare } from '../services/videoCallService';
+import {
+  startVideoCall,
+  endVideoCall,
+  generateJitsiEmbedHtml,
+  sendVideoCallStartedNotification,
+} from '../services/videoCallService';
 import { getCurrentUser } from '../services/authService';
 
-const { width, height } = Dimensions.get('window');
-
 export default function VideoCallScreen({ route, navigation }: any) {
-  const { callId, roomId, appointmentId, participantName, isTestMode: routeTestMode } = route.params || {};
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
-  const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
-  const [showControls, setShowControls] = useState(true);
-  const [isRecording, setIsRecording] = useState(false);
-  const [showEndCallModal, setShowEndCallModal] = useState(false);
-  const [callNotes, setCallNotes] = useState('');
-  const [isTestMode, setIsTestMode] = useState(false);
+  const {
+    callId,
+    roomId: routeRoomId,
+    participantName,
+    patientId,
+    isInstantCall,
+  } = route.params || {};
 
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [jitsiRoomId, setJitsiRoomId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [callDuration, setCallDuration] = useState(0);
+  const [showTopBar, setShowTopBar] = useState(true);
   const callTimer = useRef<NodeJS.Timeout | null>(null);
-  const controlsTimer = useRef<NodeJS.Timeout | null>(null);
+  const topBarTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Test modu kontrolü
-    const testMode = routeTestMode || callId?.startsWith('test-') || appointmentId?.startsWith('test-');
-    setIsTestMode(testMode);
-    
     initializeCall();
-    startCallTimer();
-    
     return () => {
       if (callTimer.current) clearInterval(callTimer.current);
-      if (controlsTimer.current) clearTimeout(controlsTimer.current);
+      if (topBarTimer.current) clearTimeout(topBarTimer.current);
     };
   }, []);
 
@@ -54,22 +51,41 @@ export default function VideoCallScreen({ route, navigation }: any) {
       const user = await getCurrentUser();
       setCurrentUser(user);
 
-      // Eğer callId varsa mevcut görüşmeye katıl, yoksa test görüşmesi başlat
-      if (user && (callId || appointmentId)) {
-        const actualCallId = callId || `test-call-${Date.now()}`;
-        const callData = await startVideoCall(actualCallId, user.id, user.role);
-        setIsConnected(true);
-      } else {
-        // Test modu
-        setIsConnected(true);
+      if (routeRoomId) {
+        setJitsiRoomId(routeRoomId);
+        setLoading(false);
+        startTimer();
+        return;
       }
-    } catch (error) {
-      Alert.alert('Hata', 'Video görüşme başlatılamadı');
-      navigation.goBack();
+
+      if (callId && user) {
+        const role = user.role === 'admin' ? 'patient' : (user.role as 'dietitian' | 'patient');
+        const callData = await startVideoCall(callId, user.id, role);
+        setJitsiRoomId(callData.roomId);
+
+        if (isInstantCall && patientId && role === 'dietitian') {
+          await sendVideoCallStartedNotification(
+            patientId,
+            user.displayName || 'Diyetisyen',
+            callData.roomId
+          );
+        }
+      } else {
+        const testRoom = `diyetle-test-${Date.now()}`;
+        setJitsiRoomId(testRoom);
+      }
+
+      setLoading(false);
+      startTimer();
+    } catch (error: any) {
+      const testRoom = `diyetle-test-${Date.now()}`;
+      setJitsiRoomId(testRoom);
+      setLoading(false);
+      startTimer();
     }
   };
 
-  const startCallTimer = () => {
+  const startTimer = () => {
     callTimer.current = setInterval(() => {
       setCallDuration(prev => prev + 1);
     }, 1000);
@@ -81,250 +97,132 @@ export default function VideoCallScreen({ route, navigation }: any) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-    // WebRTC mute/unmute logic burada olacak
-  };
-
-  const toggleVideo = () => {
-    setIsVideoOff(!isVideoOff);
-    // WebRTC video on/off logic burada olacak
-  };
-
-  const toggleSpeaker = () => {
-    setIsSpeakerOn(!isSpeakerOn);
-    // Audio output toggle logic burada olacak
-  };
-
-  const handleScreenShare = async () => {
-    try {
-      if (!isScreenSharing) {
-        const actualCallId = callId || `test-call-${Date.now()}`;
-        await startScreenShare(actualCallId, currentUser?.id || 'test-user');
-        setIsScreenSharing(true);
-      } else {
-        setIsScreenSharing(false);
-      }
-    } catch (error) {
-      Alert.alert('Hata', 'Ekran paylaşımı başlatılamadı');
-    }
-  };
-
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
-    // Recording logic burada olacak
-  };
-
   const handleEndCall = async () => {
+    Alert.alert(
+      'Gorusmeyi Sonlandir',
+      'Gorusmeyi sonlandirmak istediginizden emin misiniz?',
+      [
+        { text: 'Iptal', style: 'cancel' },
+        {
+          text: 'Sonlandir',
+          style: 'destructive',
+          onPress: async () => {
+            if (callTimer.current) clearInterval(callTimer.current);
+            try {
+              if (callId && currentUser) {
+                await endVideoCall(callId, currentUser.id);
+              }
+            } catch {}
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
+  const getJitsiUrl = () => `https://meet.jit.si/${jitsiRoomId}`;
+
+  const handleShareLink = async () => {
+    if (!jitsiRoomId) return;
+    const url = getJitsiUrl();
     try {
-      if (callTimer.current) {
-        clearInterval(callTimer.current);
-        callTimer.current = null;
-      }
-      
-      // Eğer gerçek callId varsa sonlandır
-      if (callId && currentUser) {
-        await endVideoCall(callId, currentUser.id, callNotes);
-      } else {
-      }
-      
-      navigation.goBack();
-    } catch (error) {
-      // Hata olsa bile geri git
-      navigation.goBack();
-    }
+      await Share.share({ message: `Gorusme linki: ${url}`, url });
+    } catch {}
   };
 
-  const showControlsTemporarily = () => {
-    setShowControls(true);
-    if (controlsTimer.current) clearTimeout(controlsTimer.current);
-    controlsTimer.current = setTimeout(() => {
-      setShowControls(false);
-    }, 5000);
+  const handleOpenInBrowser = () => {
+    if (!jitsiRoomId) return;
+    Linking.openURL(getJitsiUrl());
   };
 
-  const getConnectionQualityColor = () => {
-    switch (connectionQuality) {
-      case 'excellent': return '#4CAF50';
-      case 'good': return '#8BC34A';
-      case 'fair': return '#FF9800';
-      case 'poor': return '#F44336';
-      default: return '#8BC34A';
+  const handleScreenTap = () => {
+    setShowTopBar(true);
+    if (topBarTimer.current) clearTimeout(topBarTimer.current);
+    topBarTimer.current = setTimeout(() => setShowTopBar(false), 4000);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar hidden />
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Gorusme hazirlaniyor...</Text>
+      </View>
+    );
+  }
+
+  const jitsiHtml = jitsiRoomId
+    ? generateJitsiEmbedHtml(jitsiRoomId, currentUser?.displayName || participantName || 'Kullanici')
+    : null;
+
+  const handleWebViewMessage = (event: any) => {
+    if (event.nativeEvent.data === 'CALL_ENDED') {
+      if (callTimer.current) clearInterval(callTimer.current);
+      navigation.goBack();
     }
   };
 
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      
-      {/* Video Container */}
-      <TouchableOpacity 
-        style={styles.videoContainer} 
-        activeOpacity={1}
-        onPress={showControlsTemporarily}
-      >
-        {/* Remote Video */}
-        <View style={styles.remoteVideo}>
-          {isVideoOff ? (
-            <View style={styles.videoOffContainer}>
-              <Ionicons name="videocam-off" size={60} color={colors.white} />
-              <Text style={styles.videoOffText}>Kamera Kapalı</Text>
-            </View>
-          ) : (
-            <View style={styles.videoPlaceholder}>
-              <Text style={styles.placeholderText}>
-                {isTestMode ? '🧪 Test Video Stream' : 'Video Stream'}
-              </Text>
-              {isTestMode && (
-                <Text style={styles.testModeText}>
-                  Bu bir test görüşmesidir
-                </Text>
-              )}
+
+      {jitsiHtml ? (
+        <WebView
+          source={{ html: jitsiHtml, baseUrl: 'https://meet.jit.si' }}
+          style={styles.webview}
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          javaScriptEnabled
+          domStorageEnabled
+          originWhitelist={['*']}
+          allowsFullscreenVideo
+          onMessage={handleWebViewMessage}
+          startInLoadingState
+          renderLoading={() => (
+            <View style={styles.webviewLoading}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.webviewLoadingText}>Gorusme baglaniyor...</Text>
             </View>
           )}
-        </View>
-
-        {/* Local Video (Picture in Picture) */}
-        <View style={styles.localVideo}>
-          <View style={styles.localVideoPlaceholder}>
-            <Ionicons name="person" size={30} color={colors.white} />
-          </View>
-        </View>
-
-        {/* Top Info Bar */}
-        {showControls && (
-          <View style={styles.topBar}>
-            <View style={styles.connectionInfo}>
-              <View style={[styles.connectionDot, { backgroundColor: getConnectionQualityColor() }]} />
-              <Text style={styles.connectionText}>{connectionQuality}</Text>
-            </View>
-            
-            <Text style={styles.durationText}>{formatDuration(callDuration)}</Text>
-            
-            {isRecording && (
-              <View style={styles.recordingIndicator}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingText}>REC</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Screen Share Indicator */}
-        {isScreenSharing && (
-          <View style={styles.screenShareIndicator}>
-            <Ionicons name="desktop" size={20} color={colors.white} />
-            <Text style={styles.screenShareText}>Ekran Paylaşılıyor</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      {/* Controls */}
-      {showControls && (
-        <View style={styles.controlsContainer}>
-          <View style={styles.controlsRow}>
-            {/* Mute Button */}
-            <TouchableOpacity 
-              style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-              onPress={toggleMute}
-            >
-              <Ionicons 
-                name={isMuted ? "mic-off" : "mic"} 
-                size={24} 
-                color={isMuted ? colors.error : colors.white} 
-              />
-            </TouchableOpacity>
-
-            {/* Video Button */}
-            <TouchableOpacity 
-              style={[styles.controlButton, isVideoOff && styles.controlButtonActive]}
-              onPress={toggleVideo}
-            >
-              <Ionicons 
-                name={isVideoOff ? "videocam-off" : "videocam"} 
-                size={24} 
-                color={isVideoOff ? colors.error : colors.white} 
-              />
-            </TouchableOpacity>
-
-            {/* Speaker Button */}
-            <TouchableOpacity 
-              style={[styles.controlButton, !isSpeakerOn && styles.controlButtonActive]}
-              onPress={toggleSpeaker}
-            >
-              <Ionicons 
-                name={isSpeakerOn ? "volume-high" : "volume-mute"} 
-                size={24} 
-                color={colors.white} 
-              />
-            </TouchableOpacity>
-
-            {/* Screen Share Button */}
-            <TouchableOpacity 
-              style={[styles.controlButton, isScreenSharing && styles.controlButtonActive]}
-              onPress={handleScreenShare}
-            >
-              <Ionicons 
-                name="desktop" 
-                size={24} 
-                color={isScreenSharing ? colors.primary : colors.white} 
-              />
-            </TouchableOpacity>
-
-            {/* Recording Button */}
-            <TouchableOpacity 
-              style={[styles.controlButton, isRecording && styles.controlButtonActive]}
-              onPress={toggleRecording}
-            >
-              <Ionicons 
-                name="radio-button-on" 
-                size={24} 
-                color={isRecording ? colors.error : colors.white} 
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* End Call Button */}
-          <TouchableOpacity 
-            style={styles.endCallButton}
-            onPress={() => setShowEndCallModal(true)}
-          >
-            <Ionicons name="call" size={28} color={colors.white} />
-          </TouchableOpacity>
+          onTouchStart={handleScreenTap}
+        />
+      ) : (
+        <View style={styles.errorContainer}>
+          <Ionicons name="videocam-off-outline" size={64} color={colors.textLight} />
+          <Text style={styles.errorText}>Gorusme odasina baglanılamadi</Text>
         </View>
       )}
 
-      {/* End Call Modal */}
-      <Modal
-        visible={showEndCallModal}
-        transparent
-        animationType="fade"
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Görüşmeyi Sonlandır</Text>
-            <Text style={styles.modalText}>
-              Görüşmeyi sonlandırmak istediğinizden emin misiniz?
-            </Text>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={styles.modalCancelButton}
-                onPress={() => setShowEndCallModal(false)}
-              >
-                <Text style={styles.modalCancelText}>İptal</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.modalEndButton}
-                onPress={handleEndCall}
-              >
-                <Text style={styles.modalEndText}>Sonlandır</Text>
-              </TouchableOpacity>
-            </View>
+      {showTopBar && (
+        <View style={styles.topBar}>
+          <View style={styles.topLeft}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>CANLI</Text>
           </View>
+          <Text style={styles.participantName} numberOfLines={1}>
+            {participantName || 'Gorusme'}
+          </Text>
+          <Text style={styles.durationText}>{formatDuration(callDuration)}</Text>
         </View>
-      </Modal>
+      )}
+
+      {showTopBar && (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity style={styles.controlBtn} onPress={handleShareLink}>
+            <Ionicons name="share-social-outline" size={22} color={colors.white} />
+            <Text style={styles.controlBtnText}>Paylas</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.endCallBtn} onPress={handleEndCall}>
+            <Ionicons name="call" size={26} color={colors.white} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.controlBtn} onPress={handleOpenInBrowser}>
+            <Ionicons name="open-outline" size={22} color={colors.white} />
+            <Text style={styles.controlBtnText}>Tarayici</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -334,214 +232,114 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  videoContainer: {
+  loadingContainer: {
     flex: 1,
-    position: 'relative',
-  },
-  remoteVideo: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-  },
-  videoOffContainer: {
-    flex: 1,
+    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#333',
+    gap: 16,
   },
-  videoOffText: {
+  loadingText: {
     color: colors.white,
     fontSize: 16,
-    marginTop: 10,
   },
-  videoPlaceholder: {
+  webview: {
     flex: 1,
+  },
+  webviewLoading: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: '#111',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#2a2a2a',
+    gap: 12,
   },
-  placeholderText: {
-    color: colors.white,
-    fontSize: 18,
-    textAlign: 'center',
-  },
-  testModeText: {
+  webviewLoadingText: {
     color: colors.white,
     fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    opacity: 0.8,
   },
-  localVideo: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-    width: 120,
-    height: 160,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-  localVideoPlaceholder: {
+  errorContainer: {
     flex: 1,
-    backgroundColor: '#444',
+    backgroundColor: '#111',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
+  },
+  errorText: {
+    color: colors.textLight,
+    fontSize: 16,
+    textAlign: 'center',
   },
   topBar: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 60,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    top: 0, left: 0, right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.65)',
   },
-  connectionInfo: {
+  topLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    width: 70,
   },
-  connectionDot: {
+  liveDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 6,
+    backgroundColor: '#ff3b30',
   },
-  connectionText: {
+  liveText: {
     color: colors.white,
-    fontSize: 12,
-    textTransform: 'capitalize',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  participantName: {
+    flex: 1,
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginHorizontal: 8,
   },
   durationText: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
+    width: 50,
+    textAlign: 'right',
   },
-  recordingIndicator: {
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0, left: 0, right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.error,
-    marginRight: 4,
-  },
-  recordingText: {
-    color: colors.error,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  screenShareIndicator: {
-    position: 'absolute',
-    top: 70,
-    left: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  screenShareText: {
-    color: colors.white,
-    fontSize: 12,
-    marginLeft: 6,
-  },
-  controlsContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-  },
-  controlsRow: {
-    flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(0,0,0,0.75)',
   },
-  controlButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
+  controlBtn: {
     alignItems: 'center',
+    gap: 4,
+    width: 80,
   },
-  controlButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+  controlBtnText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '500',
   },
-  endCallButton: {
+  endCallBtn: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.error,
+    backgroundColor: '#ff3b30',
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 24,
-    width: width * 0.8,
-    maxWidth: 320,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.darkGray,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  modalText: {
-    fontSize: 16,
-    color: colors.gray,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    marginRight: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
-  },
-  modalCancelText: {
-    color: colors.gray,
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  modalEndButton: {
-    flex: 1,
-    paddingVertical: 12,
-    marginLeft: 8,
-    borderRadius: 8,
-    backgroundColor: colors.error,
-  },
-  modalEndText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
   },
 });

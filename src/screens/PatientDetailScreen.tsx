@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,8 @@ import {
   FOOD_ALLERGIES,
   ACTIVITY_LEVELS,
 } from '../models/Questionnaire';
+import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 export default function PatientDetailScreen({ route, navigation }: any) {
   const { patient } = route.params as { patient: Patient };
@@ -50,6 +52,12 @@ export default function PatientDetailScreen({ route, navigation }: any) {
   
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Mood data
+  const [moodEntries, setMoodEntries] = useState<{ date: string; mood: number; energy: number }[]>([]);
+
+  // Exercise data
+  const [exerciseEntries, setExerciseEntries] = useState<{ date: string; name: string; duration: number; type: string }[]>([]);
 
   // Diet Expiry Modal
   const [showExpiryModal, setShowExpiryModal] = useState(false);
@@ -74,6 +82,42 @@ export default function PatientDetailScreen({ route, navigation }: any) {
 
       const dietPlansData = await getDietPlansByPatient(patient.id!);
       setDietPlans(dietPlansData);
+
+      // Ruh hali verilerini yükle (son 7 gün)
+      try {
+        const moodQ = query(
+          collection(db, 'mood_entries'),
+          where('userId', '==', patient.userId),
+          orderBy('date', 'desc'),
+          limit(7),
+        );
+        const moodSnap = await getDocs(moodQ);
+        const entries = moodSnap.docs.map((d) => {
+          const data = d.data();
+          return { date: data.date, mood: data.mood, energy: data.energy };
+        });
+        setMoodEntries(entries);
+      } catch {
+        // mood_entries indexi yoksa sessizce devam et
+      }
+
+      // Egzersiz verilerini yükle (son 14 gün)
+      try {
+        const exerciseQ = query(
+          collection(db, 'exercise_logs'),
+          where('userId', '==', patient.userId),
+          orderBy('date', 'desc'),
+          limit(14),
+        );
+        const exerciseSnap = await getDocs(exerciseQ);
+        const exEntries = exerciseSnap.docs.map((d) => {
+          const data = d.data();
+          return { date: data.date, name: data.name, duration: data.duration, type: data.type };
+        });
+        setExerciseEntries(exEntries);
+      } catch {
+        // exercise_logs indexi yoksa sessizce devam et
+      }
     } catch (error: any) {
     } finally {
       setLoading(false);
@@ -110,7 +154,7 @@ export default function PatientDetailScreen({ route, navigation }: any) {
                   style: 'destructive',
                   onPress: async () => {
                     try {
-                      await deletePatient(patient.id!);
+                      await deletePatient(patient.id!, patient.userId);
                       Alert.alert('✅ Başarılı!', `${patient.name} ve tüm verileri başarıyla silindi!`, [
                         { text: 'Tamam', onPress: () => navigation.goBack() },
                       ]);
@@ -648,6 +692,93 @@ export default function PatientDetailScreen({ route, navigation }: any) {
                     </View>
                   </>
                 )}
+
+                {/* Ruh Hali & Enerji (son 7 gün) */}
+                {moodEntries.length > 0 && (() => {
+                  const MOODS = ['', '😞', '😕', '😐', '🙂', '😄'];
+                  const ENERGIES = ['', '🪫', '😴', '😌', '⚡', '🔥'];
+                  const moodAvg = (moodEntries.reduce((s, e) => s + e.mood, 0) / moodEntries.length).toFixed(1);
+                  const energyAvg = (moodEntries.reduce((s, e) => s + e.energy, 0) / moodEntries.length).toFixed(1);
+                  return (
+                    <>
+                      <Text style={styles.sectionTitle}>💙 Ruh Hali & Enerji (Son 7 Gün)</Text>
+                      <View style={[styles.statsContainer, { marginBottom: 8 }]}>
+                        <View style={styles.statCard}>
+                          <Text style={{ fontSize: 24 }}>{MOODS[Math.round(Number(moodAvg))]}</Text>
+                          <Text style={styles.statValue}>{moodAvg}</Text>
+                          <Text style={styles.statLabel}>Ruh Hali</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                          <Text style={{ fontSize: 24 }}>{ENERGIES[Math.round(Number(energyAvg))]}</Text>
+                          <Text style={styles.statValue}>{energyAvg}</Text>
+                          <Text style={styles.statLabel}>Enerji</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.emptyCard, { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-start' }]}>
+                        {moodEntries.map((e) => (
+                          <View key={e.date} style={{ alignItems: 'center', minWidth: 40 }}>
+                            <Text style={{ fontSize: 16 }}>{MOODS[e.mood]}</Text>
+                            <Text style={{ fontSize: 10, color: colors.textLight }}>
+                              {e.date.slice(5)}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </>
+                  );
+                })()}
+
+                {/* Egzersiz Logları (son 14 gün) */}
+                {exerciseEntries.length > 0 && (() => {
+                  const TYPE_MAP: Record<string, { emoji: string; color: string }> = {
+                    cardio:      { emoji: '🏃', color: '#EF4444' },
+                    strength:    { emoji: '🏋️', color: '#8B5CF6' },
+                    flexibility: { emoji: '🧘', color: '#22C55E' },
+                    sport:       { emoji: '⚽', color: '#3B82F6' },
+                    other:       { emoji: '🎯', color: '#F59E0B' },
+                  };
+                  const totalMinutes = exerciseEntries.reduce((s, e) => s + (e.duration || 0), 0);
+                  const totalSessions = exerciseEntries.length;
+                  return (
+                    <>
+                      <Text style={styles.sectionTitle}>🏃 Egzersiz (Son 14 Gün)</Text>
+                      <View style={[styles.statsContainer, { marginBottom: 8 }]}>
+                        <View style={styles.statCard}>
+                          <Text style={{ fontSize: 24 }}>🏅</Text>
+                          <Text style={styles.statValue}>{totalSessions}</Text>
+                          <Text style={styles.statLabel}>Antrenman</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                          <Text style={{ fontSize: 24 }}>⏱️</Text>
+                          <Text style={styles.statValue}>{totalMinutes}</Text>
+                          <Text style={styles.statLabel}>Toplam dk</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                          <Text style={{ fontSize: 24 }}>📅</Text>
+                          <Text style={styles.statValue}>{Math.round(totalMinutes / 14)}</Text>
+                          <Text style={styles.statLabel}>Ort. dk/gün</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.emptyCard, { alignItems: 'flex-start', gap: 8, paddingVertical: 12 }]}>
+                        {exerciseEntries.map((e, i) => {
+                          const t = TYPE_MAP[e.type] || TYPE_MAP.other;
+                          return (
+                            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%' }}>
+                              <Text style={{ fontSize: 18, width: 26 }}>{t.emoji}</Text>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{e.name}</Text>
+                                <Text style={{ fontSize: 12, color: colors.textLight }}>{e.date}</Text>
+                              </View>
+                              <View style={{ backgroundColor: t.color + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: t.color }}>{e.duration} dk</Text>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </>
+                  );
+                })()}
 
                 {/* Grafik */}
                 {progressList.length > 1 && getChartData() && getChartData()!.datasets[0].data.some(v => v > 0) && (

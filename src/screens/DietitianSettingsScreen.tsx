@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Switch,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getColors } from '../constants/colors';
@@ -63,7 +64,7 @@ export default function DietitianSettingsScreen({ navigation }: any) {
     );
   };
 
-  const handleProfileImageSelect = async (type: 'emoji' | 'avatar', value: string) => {
+  const handleProfileImageSelect = async (type: 'emoji' | 'avatar' | 'photo', value: string) => {
     if (!user) return;
 
     try {
@@ -72,7 +73,6 @@ export default function DietitianSettingsScreen({ navigation }: any) {
       } else {
         await updateUserProfileImage(user.id, undefined, value);
       }
-      // Reload user to get updated profile
       await loadUser();
     } catch (error: any) {
       Alert.alert('Hata', error.message);
@@ -86,7 +86,14 @@ export default function DietitianSettingsScreen({ navigation }: any) {
     }
 
     if (user?.profileImage) {
-      // Avatar preset - find the matching avatar
+      if (user.profileImage.startsWith('http')) {
+        return (
+          <Image
+            source={{ uri: user.profileImage }}
+            style={{ width: 80, height: 80, borderRadius: 40 }}
+          />
+        );
+      }
       const avatarPreset = AVATAR_PRESETS.find(a => a.id === user.profileImage);
       if (avatarPreset) {
         return (
@@ -195,6 +202,13 @@ export default function DietitianSettingsScreen({ navigation }: any) {
               subtitle="Hesap güvenliğinizi güncelleyin"
               onPress={() => navigation.navigate('ChangePassword')}
             />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <SettingItem
+              icon="mail-outline"
+              title="E-posta Değiştir"
+              subtitle="Hesabınızın e-posta adresini güncelleyin"
+              onPress={() => navigation.navigate('ChangeEmail')}
+            />
           </View>
         </View>
 
@@ -278,6 +292,13 @@ export default function DietitianSettingsScreen({ navigation }: any) {
               subtitle="Push bildirimlerini yönetin"
               onPress={() => navigation.navigate('NotificationSettings')}
             />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <SettingItem
+              icon="mail-outline"
+              title="E-posta Bildirimleri"
+              subtitle="Hangi e-postaları alacağınızı seçin"
+              onPress={() => navigation.navigate('NotificationSettings')}
+            />
           </View>
         </View>
 
@@ -330,6 +351,8 @@ export default function DietitianSettingsScreen({ navigation }: any) {
         onSelect={handleProfileImageSelect}
         currentEmoji={user?.profileEmoji}
         currentAvatar={user?.profileImage}
+        currentPhotoURL={user?.profileImage?.startsWith('http') ? user.profileImage : undefined}
+        userId={user?.id}
       />
     </View>
   );

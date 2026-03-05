@@ -24,7 +24,7 @@ interface NotificationOption {
   title: string;
   description: string;
   icon: string;
-  category: 'general' | 'patient' | 'messages' | 'reminders';
+  category: 'general' | 'patient' | 'messages' | 'reminders' | 'email';
 }
 
 const NOTIFICATION_OPTIONS: NotificationOption[] = [
@@ -112,6 +112,43 @@ const NOTIFICATION_OPTIONS: NotificationOption[] = [
     icon: 'alarm',
     category: 'reminders',
   },
+
+  // E-posta Bildirimleri
+  {
+    id: 'emailNotifications',
+    title: 'E-posta Bildirimleri',
+    description: 'Tüm e-posta bildirimlerini aç/kapat',
+    icon: 'mail',
+    category: 'email',
+  },
+  {
+    id: 'emailWelcome',
+    title: 'Hoşgeldin E-postası',
+    description: 'Kayıt sonrası hoşgeldin maili',
+    icon: 'sparkles',
+    category: 'email',
+  },
+  {
+    id: 'emailAppointmentReminder',
+    title: 'Randevu Hatırlatma Maili',
+    description: 'Randevu öncesinde e-posta al',
+    icon: 'calendar',
+    category: 'email',
+  },
+  {
+    id: 'emailDietPlanShared',
+    title: 'Diyet Planı Maili',
+    description: 'Diyetisyen plan paylaştığında e-posta al',
+    icon: 'nutrition',
+    category: 'email',
+  },
+  {
+    id: 'emailApprovalStatus',
+    title: 'Onay Durum Maili',
+    description: 'Başvuru onay/red durumunda e-posta al',
+    icon: 'checkmark-circle',
+    category: 'email',
+  },
 ];
 
 const CATEGORIES = [
@@ -119,6 +156,7 @@ const CATEGORIES = [
   { id: 'patient', title: 'Danışan Bildirimleri', icon: 'people' },
   { id: 'messages', title: 'Mesaj Bildirimleri', icon: 'chatbubbles' },
   { id: 'reminders', title: 'Hatırlatmalar', icon: 'notifications' },
+  { id: 'email', title: 'E-posta Bildirimleri', icon: 'mail' },
 ];
 
 export default function NotificationSettingsScreen({ navigation }: any) {
@@ -163,6 +201,20 @@ export default function NotificationSettingsScreen({ navigation }: any) {
         });
       }
 
+      // Eğer "E-posta Bildirimleri" kapatılıyorsa, e-posta alt bildirimleri kapat
+      if (key === 'emailNotifications' && !updatedSettings.emailNotifications) {
+        updatedSettings.emailWelcome = false;
+        updatedSettings.emailAppointmentReminder = false;
+        updatedSettings.emailDietPlanShared = false;
+        updatedSettings.emailApprovalStatus = false;
+      }
+
+      // Eğer herhangi bir e-posta alt bildirimi açıldıysa, emailNotifications otomatik açılsın
+      const emailSubKeys = ['emailWelcome', 'emailAppointmentReminder', 'emailDietPlanShared', 'emailApprovalStatus'];
+      if (emailSubKeys.includes(key as string) && updatedSettings[key]) {
+        updatedSettings.emailNotifications = true;
+      }
+
       // Eğer herhangi bir bildirim açıldıysa, "Tüm Bildirimler" otomatik açılsın
       if (key !== 'allNotifications' && updatedSettings[key]) {
         updatedSettings.allNotifications = true;
@@ -181,7 +233,10 @@ export default function NotificationSettingsScreen({ navigation }: any) {
     if (!settings) return null;
 
     const isEnabled = settings[option.id];
-    const isDisabled = !settings.allNotifications && option.id !== 'allNotifications';
+    const emailSubKeys = ['emailWelcome', 'emailAppointmentReminder', 'emailDietPlanShared', 'emailApprovalStatus'];
+    const isDisabled =
+      (!settings.allNotifications && option.id !== 'allNotifications') ||
+      (!settings.emailNotifications && emailSubKeys.includes(option.id));
 
     return (
       <View

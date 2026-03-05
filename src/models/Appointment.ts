@@ -5,7 +5,8 @@ export interface Appointment {
   date: string; // ISO format: 2025-11-21
   time: string; // HH:mm format: 14:30
   startDateTime: number; // Unix timestamp
-  meetingLink: string; // Zoom, Google Meet URL
+  meetingLink: string; // Zoom, Google Meet URL or diyetle:// deep link
+  meetingType?: 'link' | 'app';
   status: 'scheduled' | 'completed' | 'cancelled';
   patientName: string;
   patientPhone?: string;

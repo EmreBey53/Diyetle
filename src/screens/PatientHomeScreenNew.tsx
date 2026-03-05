@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,13 @@ import {
   RefreshControl,
   Modal,
   Linking,
+  Animated,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const PANEL_HEIGHT = SCREEN_HEIGHT * 0.78;
 import { Ionicons } from '@expo/vector-icons';
 import { getColors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
@@ -28,6 +34,31 @@ import { DietPlan, Meal, getMealTypeName } from '../models/DietPlan';
 import { Appointment } from '../models/Appointment';
 import MealPhotoUploadModal from '../components/MealPhotoUploadModal';
 import NotificationPanel from '../components/NotificationPanel';
+import { scheduleDailySummaryNotification } from '../services/notificationService';
+import { HomeScreenSkeleton } from '../components/SkeletonLoader';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
+import { ALL_BADGES, BadgeDef, UserStats, fetchUserStats, CATEGORY_LABELS } from '../services/badgeService';
+
+// Journey panel — kategori renkleri (hex tasarım)
+const JOURNEY_CAT_COLORS: Record<string, { border: string; bg: string; glow: string; text: string }> = {
+  diet:      { border: '#2f7f33', bg: 'rgba(47,127,51,0.18)',  glow: 'rgba(52,211,153,0.3)',  text: '#34d399' },
+  water:     { border: '#2DD4BF', bg: 'rgba(45,212,191,0.15)', glow: 'rgba(45,212,191,0.3)',  text: '#2DD4BF' },
+  exercise:  { border: '#F59E0B', bg: 'rgba(245,158,11,0.15)', glow: 'rgba(251,191,36,0.3)',  text: '#FBBF24' },
+  mood:      { border: '#EC4899', bg: 'rgba(236,72,153,0.15)', glow: 'rgba(236,72,153,0.3)',  text: '#F472B6' },
+  streak:    { border: '#EF4444', bg: 'rgba(239,68,68,0.15)',  glow: 'rgba(239,68,68,0.3)',   text: '#F87171' },
+  milestone: { border: '#A78BFA', bg: 'rgba(167,139,250,0.15)',glow: 'rgba(167,139,250,0.3)', text: '#A78BFA' },
+  photo:     { border: '#60A5FA', bg: 'rgba(96,165,250,0.15)', glow: 'rgba(96,165,250,0.3)',  text: '#60A5FA' },
+};
+const J_XP = 50;
+const J_THRESHOLDS = [0, 100, 300, 600, 1000, 1500];
+const J_NAMES = ['Başlangıç', 'Gelişen', 'İlerlemiş', 'Uzman', 'Usta', 'Platin Usta'];
+function jLevel(xp: number) {
+  let l = 0;
+  J_THRESHOLDS.forEach((t, i) => { if (xp >= t) l = i; });
+  const next = J_THRESHOLDS[l + 1] ?? J_THRESHOLDS[l] + 500;
+  return { level: l + 1, name: J_NAMES[l], xp, nextXP: next, progress: Math.min(((xp - J_THRESHOLDS[l]) / (next - J_THRESHOLDS[l])) * 100, 100) };
+}
 
 const AVATAR_PRESETS = [
   { id: 'male1', icon: 'person', color: '#4CAF50' },
@@ -57,6 +88,55 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
   const [mealPhotoModalVisible, setMealPhotoModalVisible] = useState(false);
   const [notificationPanelVisible, setNotificationPanelVisible] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [badgeSummary, setBadgeSummary] = useState<{
+    earnedCount: number;
+    totalCount: number;
+    recentEmojis: string;
+  } | null>(null);
+  const [journeyPanelVisible, setJourneyPanelVisible] = useState(false);
+  const [journeyStats, setJourneyStats] = useState<UserStats | null>(null);
+  const [earnedBadgeIds, setEarnedBadgeIds] = useState<Set<string>>(new Set());
+  const panelAnim = useRef(new Animated.Value(PANEL_HEIGHT)).current;
+
+  const openJourneyPanel = () => {
+    setJourneyPanelVisible(true);
+    Animated.spring(panelAnim, {
+      toValue: 0,
+      tension: 65,
+      friction: 11,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeJourneyPanel = () => {
+    Animated.timing(panelAnim, {
+      toValue: PANEL_HEIGHT,
+      duration: 280,
+      useNativeDriver: true,
+    }).start(() => setJourneyPanelVisible(false));
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) panelAnim.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
+          closeJourneyPanel();
+        } else {
+          Animated.spring(panelAnim, {
+            toValue: 0,
+            tension: 65,
+            friction: 11,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Get current date
   const getCurrentDate = () => {
@@ -130,6 +210,12 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
       setUser(currentUser);
 
       if (currentUser) {
+        // Diyetisyen seçilmemişse zorunlu seçim ekranına yönlendir
+        if (!(currentUser as any).dietitianId) {
+          navigation.replace('SelectDietitian', { user: currentUser, nextScreen: 'PatientHome' });
+          return;
+        }
+
         const patientProfile = await getPatientProfileByUserId(currentUser.id);
         setPatient(patientProfile);
 
@@ -160,8 +246,11 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
 
           // Randevuları yükle ve bir sonraki randevuyu bul
           const appointments = await getPatientAppointments(currentUser.id);
+          let hasAppointmentToday = false;
           if (appointments && appointments.length > 0) {
             const now = Date.now();
+            const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+            const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
             // Gelecekteki randevuları filtrele ve en yakını bul
             const upcomingAppointments = appointments
               .filter(apt => apt.startDateTime >= now && apt.status === 'scheduled')
@@ -170,7 +259,37 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
             if (upcomingAppointments.length > 0) {
               setNextAppointment(upcomingAppointments[0]);
             }
+            hasAppointmentToday = appointments.some(
+              apt => apt.startDateTime >= todayStart.getTime() && apt.startDateTime <= todayEnd.getTime()
+            );
           }
+
+          // Günlük özet bildirimi planla (hata olursa sessizce geç)
+          const mealCount = activeDiet ? activeDiet.meals.length : 0;
+          const wGoal = patientProfile.dailyWaterGoal ?? 2.5;
+          scheduleDailySummaryNotification(mealCount, wGoal, hasAppointmentToday).catch(() => {});
+
+        }
+
+        // Rozet özeti yükle — patientProfile bağımsız
+        try {
+          const [earnedDocs, uStats] = await Promise.all([
+            getDocs(query(collection(db, 'achievements'), where('userId', '==', currentUser.id))),
+            fetchUserStats(currentUser.id),
+          ]);
+          const earnedIds = new Set(earnedDocs.docs.map((d) => d.data().badgeId as string));
+          const earnedBadges = ALL_BADGES.filter((b) => earnedIds.has(b.id));
+          const recent3 = earnedBadges.slice(-3).map((b) => b.emoji).join(' ');
+          setBadgeSummary({
+            earnedCount: earnedBadges.length,
+            totalCount: ALL_BADGES.length,
+            recentEmojis: recent3,
+          });
+          setEarnedBadgeIds(earnedIds);
+          setJourneyStats(uStats);
+        } catch {
+          // Hata olursa boş özet göster
+          setBadgeSummary({ earnedCount: 0, totalCount: ALL_BADGES.length, recentEmojis: '' });
         }
       }
     } catch (error) {
@@ -290,9 +409,26 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
   };
 
   if (loading) {
+    return <HomeScreenSkeleton />;
+  }
+
+  // Diyetisyen onayı bekleniyor
+  if (patient && (patient as any).status === 'pending') {
     return (
-      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <Text style={{ fontSize: 64, marginBottom: 20 }}>⏳</Text>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text, textAlign: 'center', marginBottom: 12 }}>
+          Onay Bekleniyor
+        </Text>
+        <Text style={{ fontSize: 15, color: colors.textLight, textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
+          Diyetisyeniniz talebinizi henüz onaylamadı. Onaylandıktan sonra tüm özelliklere erişebileceksiniz.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 }}
+          onPress={onRefresh}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Yenile</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -444,7 +580,7 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
             <TouchableOpacity
               style={[styles.quickAccessCard, { backgroundColor: colors.cardBackground }]}
               onPress={() => {
-                
+
                 // Direkt PatientMealPhotoScreen'e git
                 navigation.navigate('PatientMealPhoto');
               }}
@@ -465,7 +601,89 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
               <Text style={[styles.quickAccessLabel, { color: colors.text }]}>Mesajlarım</Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.quickAccessRow}>
+            <TouchableOpacity
+              style={[styles.quickAccessCard, { backgroundColor: colors.cardBackground }]}
+              onPress={() => navigation.navigate('ShoppingList')}
+            >
+              <View style={[styles.quickAccessIconContainer, { backgroundColor: '#22C55E15' }]}>
+                <Ionicons name="cart-outline" size={26} color="#22C55E" />
+              </View>
+              <Text style={[styles.quickAccessLabel, { color: colors.text }]}>Alışveriş Listesi</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickAccessCard, { backgroundColor: colors.cardBackground }]}
+              onPress={() => navigation.navigate('MoodTracker')}
+            >
+              <View style={[styles.quickAccessIconContainer, { backgroundColor: '#EC489920' }]}>
+                <Ionicons name="heart-outline" size={26} color="#EC4899" />
+              </View>
+              <Text style={[styles.quickAccessLabel, { color: colors.text }]}>Ruh Halim</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.quickAccessRow}>
+            <TouchableOpacity
+              style={[styles.quickAccessCard, { backgroundColor: colors.cardBackground }]}
+              onPress={() => navigation.navigate('ExerciseLog')}
+            >
+              <View style={[styles.quickAccessIconContainer, { backgroundColor: '#8B5CF620' }]}>
+                <Ionicons name="barbell-outline" size={26} color="#8B5CF6" />
+              </View>
+              <Text style={[styles.quickAccessLabel, { color: colors.text }]}>Egzersiz Logu</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickAccessCard, { backgroundColor: colors.cardBackground }]}
+              onPress={() => navigation.navigate('PatientAppointments')}
+            >
+              <View style={[styles.quickAccessIconContainer, { backgroundColor: '#F59E0B20' }]}>
+                <Ionicons name="calendar-outline" size={26} color="#F59E0B" />
+              </View>
+              <Text style={[styles.quickAccessLabel, { color: colors.text }]}>Randevularım</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.quickAccessRow}>
+            <TouchableOpacity
+              style={[styles.quickAccessCard, { backgroundColor: colors.cardBackground }]}
+              onPress={() => navigation.navigate('WaterTracking')}
+            >
+              <View style={[styles.quickAccessIconContainer, { backgroundColor: '#0EA5E920' }]}>
+                <Ionicons name="water-outline" size={26} color="#0EA5E9" />
+              </View>
+              <Text style={[styles.quickAccessLabel, { color: colors.text }]}>Su Takibi</Text>
+            </TouchableOpacity>
+
+            <View style={[styles.quickAccessCard, { backgroundColor: 'transparent' }]} />
+          </View>
+
         </View>
+
+        {/* İlerleme Yolculuğum Widget */}
+        <TouchableOpacity
+          style={styles.badgeWidget}
+          onPress={openJourneyPanel}
+          activeOpacity={0.8}
+        >
+          <View style={styles.badgeWidgetLeft}>
+            <Text style={styles.badgeWidgetIcon}>🚀</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.badgeWidgetTitle, { color: '#FFFFFF' }]}>İlerleme Yolculuğum</Text>
+              <Text style={[styles.badgeWidgetSub, { color: '#34d399' }]}>
+                {badgeSummary ? `${badgeSummary.earnedCount}/${badgeSummary.totalCount} rozet kazanıldı` : 'Rozetlerin yükleniyor...'}
+              </Text>
+              {badgeSummary?.recentEmojis ? (
+                <Text style={styles.badgeRecentEmojis}>{badgeSummary.recentEmojis}</Text>
+              ) : null}
+            </View>
+          </View>
+          <View style={[styles.badgeWidgetChevron, { backgroundColor: 'rgba(52,211,153,0.15)' }]}>
+            <Ionicons name="chevron-up" size={18} color="#34d399" />
+          </View>
+        </TouchableOpacity>
 
         {/* Current Meal Card */}
         {currentMeal && (
@@ -747,6 +965,141 @@ const PatientHomeScreenNew = forwardRef(({ navigation }: any, ref) => {
           }
         }}
       />
+
+      {/* İlerleme Yolculuğum Bottom Sheet */}
+      {journeyPanelVisible && (() => {
+        const earnedCount = badgeSummary?.earnedCount ?? 0;
+        const totalCount = badgeSummary?.totalCount ?? ALL_BADGES.length;
+        const xp = earnedCount * J_XP;
+        const lvl = jLevel(xp);
+        return (
+          <Modal transparent visible animationType="none" onRequestClose={closeJourneyPanel}>
+            <TouchableOpacity style={styles.journeyOverlay} activeOpacity={1} onPress={closeJourneyPanel} />
+
+            <Animated.View style={[styles.journeyPanel, { transform: [{ translateY: panelAnim }] }]}>
+
+              {/* Drag kolu + header */}
+              <View {...panResponder.panHandlers} style={styles.journeyDragArea}>
+                <View style={styles.journeyHandle} />
+                <View style={styles.journeyHeaderRow}>
+                  <View style={styles.journeyHeaderLeft}>
+                    <Ionicons name="shield-checkmark" size={18} color="#34d399" />
+                    <Text style={styles.journeyHeaderTitle}>İlerleme Yolculuğum</Text>
+                  </View>
+                  <TouchableOpacity onPress={closeJourneyPanel} style={styles.journeyCloseBtn}>
+                    <Ionicons name="close" size={18} color="#aaa" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Premium Status Kart */}
+                <View style={styles.journeyPremiumCard}>
+                  <View style={styles.journeyPremiumBlob} />
+                  <View style={styles.journeyPremiumTop}>
+                    <View style={styles.journeyPremiumHexWrap}>
+                      <View style={styles.journeyPremiumHex}>
+                        <Text style={{ fontSize: 24 }}>💎</Text>
+                      </View>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.journeyPremiumStatus}>PREMIUM STATUS</Text>
+                      <Text style={styles.journeyPremiumLevel}>Seviye {lvl.level}: {lvl.name}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.journeyXpRow}>
+                    <Text style={styles.journeyXpText}>{xp} / {lvl.nextXP} XP</Text>
+                    <Text style={styles.journeyXpText}>{Math.round(lvl.progress)}%</Text>
+                  </View>
+                  <View style={styles.journeyXpTrack}>
+                    <View style={[styles.journeyXpFill, { width: `${lvl.progress}%` }]} />
+                  </View>
+                  <Text style={styles.journeyXpNext}>
+                    {earnedCount} / {totalCount} rozet kazanıldı
+                  </Text>
+                </View>
+
+                {/* Kategori bazlı rozetler */}
+                <View style={styles.journeyScrollContent}>
+                  {Array.from(new Set(ALL_BADGES.map((b) => b.category))).map((cat) => {
+                    const catBadges = ALL_BADGES.filter((b) => b.category === cat);
+                    const earnedInCat = catBadges.filter((b) => earnedBadgeIds.has(b.id)).length;
+                    const allEarned = earnedInCat === catBadges.length;
+                    const color = JOURNEY_CAT_COLORS[cat] ?? JOURNEY_CAT_COLORS.milestone;
+                    return (
+                      <View key={cat} style={styles.journeyCatSection}>
+                        <View style={styles.journeyCatHeaderRow}>
+                          <Text style={styles.journeyCatTitle}>{CATEGORY_LABELS[cat]}</Text>
+                          <View style={[styles.journeyCatPill, { backgroundColor: allEarned ? color.bg : '#1E2533' }]}>
+                            <Text style={[styles.journeyCatPillTxt, { color: allEarned ? color.text : '#64748b' }]}>
+                              {earnedInCat} / {catBadges.length}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.journeyBadgeRow}>
+                          {catBadges.map((badge) => {
+                            const earned = earnedBadgeIds.has(badge.id);
+                            const prog = !earned && badge.getProgress && journeyStats ? badge.getProgress(journeyStats) : null;
+                            return (
+                              <View key={badge.id} style={styles.journeyBadgeItem}>
+                                {/* Glow */}
+                                {earned && (
+                                  <View style={[styles.journeyHexGlow, { backgroundColor: color.glow }]} />
+                                )}
+                                {/* Hex şekil */}
+                                <View style={[
+                                  styles.journeyHexShape,
+                                  {
+                                    backgroundColor: earned ? color.bg : '#1E1E2E',
+                                    borderColor: earned ? color.border : 'rgba(255,255,255,0.06)',
+                                  },
+                                ]}>
+                                  <Text style={[styles.journeyBadgeEmoji, { opacity: earned ? 1 : 0.3 }]}>
+                                    {badge.emoji}
+                                  </Text>
+                                  {!earned && (
+                                    <View style={styles.journeyHexLock}>
+                                      <Ionicons name="lock-closed" size={10} color="#555" />
+                                    </View>
+                                  )}
+                                </View>
+
+                                <Text style={[styles.journeyBadgeName, { color: earned ? '#e2e8f0' : '#475569' }]} numberOfLines={2}>
+                                  {badge.title}
+                                </Text>
+
+                                {!earned && prog && prog.value > 0 && (
+                                  <View style={styles.journeyMiniProgress}>
+                                    <View style={styles.journeyMiniTrack}>
+                                      <View style={[styles.journeyMiniFill, { width: `${prog.value}%`, backgroundColor: color.text }]} />
+                                    </View>
+                                    <Text style={[styles.journeyMiniText, { color: color.text }]}>{prog.text}</Text>
+                                  </View>
+                                )}
+                              </View>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    );
+                  })}
+
+                  <TouchableOpacity
+                    style={styles.journeyAllBtn}
+                    onPress={() => { closeJourneyPanel(); navigation.navigate('Badges'); }}
+                  >
+                    <Text style={styles.journeyAllBtnText}>Tüm Rozetleri Gör</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#fff" />
+                  </TouchableOpacity>
+
+                  <View style={{ height: 32 }} />
+                </View>
+              </ScrollView>
+            </Animated.View>
+          </Modal>
+        );
+      })()}
     </View>
   );
 });
@@ -1081,6 +1434,45 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 6,
   },
+  badgeWidget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: '#0a1f10',
+    borderWidth: 1,
+    borderColor: '#1a4a2e',
+    shadowColor: '#34d399',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  badgeWidgetLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  badgeWidgetIcon: {
+    fontSize: 36,
+  },
+  badgeWidgetTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  badgeWidgetSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  badgeRecentEmojis: {
+    fontSize: 18,
+    marginTop: 4,
+    letterSpacing: 2,
+  },
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -1173,6 +1565,290 @@ const styles = StyleSheet.create({
   modalButtonTextSecondary: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  badgeWidgetChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  // Journey Bottom Sheet — neon/gaming dark tema
+  journeyOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  journeyPanel: {
+    position: 'absolute',
+    bottom: 0, left: 0, right: 0,
+    height: PANEL_HEIGHT,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: '#0a1208',
+    shadowColor: '#34d399',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#1a4a2e',
+  },
+  journeyDragArea: {
+    paddingHorizontal: 20,
+    paddingBottom: 0,
+  },
+  journeyHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: '#333',
+  },
+  journeyCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0d2818',
+    borderWidth: 1,
+    borderColor: '#1a4a2e',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // ── Journey panel: yeni hex/dark tema stilleri ──────────────────────────────
+  journeyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  journeyHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  journeyHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  journeyPremiumCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 20,
+    backgroundColor: '#0d2818',
+    borderWidth: 1,
+    borderColor: '#1a4a2e',
+    padding: 18,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  journeyPremiumBlob: {
+    position: 'absolute',
+    top: -30,
+    right: -30,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(52,211,153,0.08)',
+  },
+  journeyPremiumTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 14,
+  },
+  journeyPremiumHexWrap: {
+    position: 'relative',
+    width: 52,
+    height: 52,
+  },
+  journeyPremiumHex: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: '#1a4a2e',
+    borderWidth: 2,
+    borderColor: '#34d399',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#34d399',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  journeyPremiumStatus: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#34d399',
+    letterSpacing: 2,
+    marginBottom: 2,
+  },
+  journeyPremiumLevel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  journeyXpRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  journeyXpText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  journeyXpTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#0a1f10',
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  journeyXpFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: '#34d399',
+    shadowColor: '#34d399',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+  },
+  journeyXpNext: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+  journeyCatHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  journeyCatPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  journeyCatPillTxt: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  journeyHexGlow: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 14,
+    opacity: 0.4,
+  },
+  journeyHexShape: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+  },
+  journeyHexLock: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#0F0F1A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  // ─────────────────────────────────────────────────────────────────────────────
+  journeyScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 20,
+  },
+  journeyCatSection: {
+    gap: 10,
+  },
+  journeyCatTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  journeyCatCount: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#888',
+  },
+  journeyBadgeRow: {
+    gap: 12,
+    paddingBottom: 4,
+  },
+  journeyBadgeItem: {
+    alignItems: 'center',
+    width: 76,
+    gap: 6,
+    position: 'relative',
+  },
+  journeyBadgeEmoji: {
+    fontSize: 28,
+  },
+  journeyBadgeName: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  journeyMiniProgress: {
+    width: 64,
+    gap: 2,
+  },
+  journeyMiniTrack: {
+    height: 3,
+    borderRadius: 2,
+    overflow: 'hidden',
+    backgroundColor: '#2A2A3A',
+  },
+  journeyMiniFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#7C3AED',
+  },
+  journeyMiniText: {
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#888',
+  },
+  journeyAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 4,
+    backgroundColor: '#059669',
+    shadowColor: '#34d399',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  journeyAllBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 

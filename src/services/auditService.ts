@@ -4,7 +4,7 @@ import { collection, addDoc, query, where, orderBy, getDocs, Timestamp } from 'f
 export interface AuditLog {
   id?: string;
   userId: string;
-  userRole: 'patient' | 'dietitian';
+  userRole: 'patient' | 'dietitian' | 'admin';
   action: string;
   resource: string;
   resourceId?: string;
