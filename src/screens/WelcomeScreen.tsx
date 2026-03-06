@@ -19,6 +19,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { getAppConfig, AppConfig } from '../services/appConfigService';
+import { signInWithGoogle } from '../services/authService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -73,10 +74,34 @@ export default function WelcomeScreen({ navigation }: any) {
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const tapCount = useRef(0);
   const lastTapTime = useRef(0);
+
+  const handleGoogleWelcome = async () => {
+    setGoogleLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result.isNewUser) {
+        navigation.navigate('Register');
+        return;
+      }
+      if (result.user?.role === 'dietitian') {
+        navigation.replace('DietitianHome');
+      } else {
+        navigation.replace('PatientHome');
+      }
+    } catch (error: any) {
+      if (error.code !== 'SIGN_IN_CANCELLED' && error.code !== 'SIGN_IN_REQUIRED') {
+        const { Alert } = await import('react-native');
+        Alert.alert('Google Giriş Hatası', error.message || 'Giriş yapılamadı.');
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleLogoPress = () => {
     const now = Date.now();
@@ -380,6 +405,22 @@ export default function WelcomeScreen({ navigation }: any) {
             {appConfig?.registrationEnabled === false ? 'Kayıt Geçici Kapalı' : 'Kayıt Ol'}
           </Text>
         </TouchableOpacity>
+
+        {/* TODO: Development build gerektirir — npx expo run:android/ios sonrası aktif et */}
+        <TouchableOpacity
+          style={[styles.googleButton, styles.buttonDisabledOpacity]}
+          onPress={handleGoogleWelcome}
+          disabled={true}
+        >
+          {googleLoading ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <>
+              <Ionicons name="logo-google" size={20} color="#EA4335" />
+              <Text style={styles.googleButtonText}>Google ile Devam Et</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -568,5 +609,22 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.white,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+    width: '80%',
+    marginTop: 12,
+  },
+  googleButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

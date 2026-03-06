@@ -8,22 +8,24 @@ import {
   Alert,
   RefreshControl,
   TouchableOpacity,
-  SectionList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { 
-  getActiveDietPlans, 
+import {
+  getActiveDietPlans,
   getExpiredDietPlans,
-  getDietPlansByPatient 
 } from '../services/dietPlanService';
 import { getCurrentUser } from '../services/authService';
 import { getPatientProfileByUserId } from '../services/patientService';
 import { getProgressByPatient } from '../services/progressService';
 import { DietPlan, getMealTypeEmoji, formatExpiryInfo, getStatusEmoji, getStatusColor } from '../models/DietPlan';
-import { colors } from '../constants/colors';
+import { getColors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import { generateAnamnesisFormPDF } from '../services/pdfService';
 
 export default function PatientDietPlanScreen({ navigation }: any) {
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
+
   const [activeDietPlan, setActiveDietPlan] = useState<DietPlan | null>(null);
   const [expiredDiets, setExpiredDiets] = useState<DietPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,29 +46,25 @@ export default function PatientDietPlanScreen({ navigation }: any) {
     try {
       setLoading(true);
       const currentUser = await getCurrentUser();
-      
+
       if (!currentUser) {
         Alert.alert('Hata', 'Kullanıcı bilgisi bulunamadı!');
         return;
       }
 
-      // Danışan profilini bul
       const profile = await getPatientProfileByUserId(currentUser.id);
-      
+
       if (!profile) {
         Alert.alert('Hata', 'Profil bulunamadı!');
         return;
       }
 
-      // Aktif diyet planlarını getir (sadece ilkini kullan)
       const activePlans = await getActiveDietPlans(profile.id!);
       setActiveDietPlan(activePlans.length > 0 ? activePlans[0] : null);
 
-      // Süresi dolmuş diyetleri getir
       const expired = await getExpiredDietPlans(profile.id!);
       setExpiredDiets(expired);
     } catch (error: any) {
-      // Hata durumunda boş state göster (izin hatası veya plan yoksa)
       setActiveDietPlan(null);
       setExpiredDiets([]);
     } finally {
@@ -98,7 +96,6 @@ export default function PatientDietPlanScreen({ navigation }: any) {
                   return;
                 }
 
-                // Hasta profilini al
                 const profile = await getPatientProfileByUserId(currentUser.id);
 
                 if (!profile) {
@@ -106,10 +103,7 @@ export default function PatientDietPlanScreen({ navigation }: any) {
                   return;
                 }
 
-                // İlerleme verilerini al
                 const progressData = await getProgressByPatient(profile.id!);
-
-                // PDF oluştur (anamnez formu + diyet listesi)
                 await generateAnamnesisFormPDF(profile, progressData, dietPlan);
 
                 Alert.alert('✅ Başarılı!', 'Diyet listeniz ve ilerleme raporunuz oluşturuldu!');
@@ -126,11 +120,15 @@ export default function PatientDietPlanScreen({ navigation }: any) {
   };
 
   const renderDietCard = (diet: DietPlan, isExpired: boolean = false) => (
-    <View key={diet.id} style={[styles.dietCard, isExpired && styles.expiredDietCard]}>
+    <View key={diet.id} style={[
+      styles.dietCard,
+      { backgroundColor: colors.cardBackground, shadowColor: '#000' },
+      isExpired && [styles.expiredDietCard, { borderColor: '#FFB3B3' }]
+    ]}>
       {/* Header */}
       <View style={styles.dietCardHeader}>
         <View style={styles.dietCardTitleContainer}>
-          <Text style={styles.dietCardTitle}>{diet.title}</Text>
+          <Text style={[styles.dietCardTitle, { color: colors.text }]}>{diet.title}</Text>
           <View
             style={[
               styles.statusBadge,
@@ -146,20 +144,20 @@ export default function PatientDietPlanScreen({ navigation }: any) {
 
       {/* Açıklama */}
       {diet.description && (
-        <Text style={styles.dietDescription}>{diet.description}</Text>
+        <Text style={[styles.dietDescription, { color: colors.textLight }]}>{diet.description}</Text>
       )}
 
-      {/* Tarih & Süresi Bilgisi */}
-      <View style={styles.dietInfoRow}>
+      {/* Tarih & Süre */}
+      <View style={[styles.dietInfoRow, { borderBottomColor: colors.border }]}>
         <View style={styles.infoItem}>
           <Ionicons name="calendar" size={16} color={colors.primary} />
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoText, { color: colors.text }]}>
             Başlangıç: {new Date(diet.startDate).toLocaleDateString('tr-TR')}
           </Text>
         </View>
         <View style={styles.infoItem}>
           <Ionicons name="time" size={16} color={colors.primary} />
-          <Text style={styles.infoText}>{formatExpiryInfo(diet.expiryDate)}</Text>
+          <Text style={[styles.infoText, { color: colors.text }]}>{formatExpiryInfo(diet.expiryDate)}</Text>
         </View>
       </View>
 
@@ -167,17 +165,17 @@ export default function PatientDietPlanScreen({ navigation }: any) {
       {(diet.dailyCalorieTarget || diet.dailyWaterGoal) && (
         <View style={styles.goalsRow}>
           {diet.dailyCalorieTarget && (
-            <View style={[styles.goalCard, styles.calorieCard]}>
+            <View style={[styles.goalCard, { backgroundColor: isDark ? '#3D2B00' : '#FFF3E0' }]}>
               <Text style={styles.goalEmoji}>🔥</Text>
-              <Text style={styles.goalValue}>{diet.dailyCalorieTarget}</Text>
-              <Text style={styles.goalLabel}>kcal / gün</Text>
+              <Text style={[styles.goalValue, { color: colors.text }]}>{diet.dailyCalorieTarget}</Text>
+              <Text style={[styles.goalLabel, { color: colors.textLight }]}>kcal / gün</Text>
             </View>
           )}
           {diet.dailyWaterGoal && (
-            <View style={[styles.goalCard, styles.waterCard]}>
+            <View style={[styles.goalCard, { backgroundColor: isDark ? '#002B3D' : '#E3F2FD' }]}>
               <Text style={styles.goalEmoji}>💧</Text>
-              <Text style={styles.goalValue}>{diet.dailyWaterGoal} L</Text>
-              <Text style={styles.goalLabel}>su / gün</Text>
+              <Text style={[styles.goalValue, { color: colors.text }]}>{diet.dailyWaterGoal} L</Text>
+              <Text style={[styles.goalLabel, { color: colors.textLight }]}>su / gün</Text>
             </View>
           )}
         </View>
@@ -185,21 +183,21 @@ export default function PatientDietPlanScreen({ navigation }: any) {
 
       {/* Öğünler */}
       <View style={styles.mealsContainer}>
-        <Text style={styles.mealsTitle}>🍽️ Öğünler</Text>
+        <Text style={[styles.mealsTitle, { color: colors.text }]}>🍽️ Öğünler</Text>
         {diet.meals.map((meal) => (
-          <View key={meal.id} style={styles.mealItem}>
-            <Text style={styles.mealName}>
+          <View key={meal.id} style={[styles.mealItem, { borderLeftColor: colors.primary }]}>
+            <Text style={[styles.mealName, { color: colors.text }]}>
               {getMealTypeEmoji(meal.type)} {meal.name}
               {meal.time && ` - ${meal.time}`}
             </Text>
             <View style={styles.foodsList}>
               {meal.foods.slice(0, 2).map((food) => (
-                <Text key={food.id} style={styles.foodItem}>
+                <Text key={food.id} style={[styles.foodItem, { color: colors.textLight }]}>
                   • {food.name}
                 </Text>
               ))}
               {meal.foods.length > 2 && (
-                <Text style={styles.moreFood}>
+                <Text style={[styles.moreFood, { color: colors.primary }]}>
                   + {meal.foods.length - 2} daha...
                 </Text>
               )}
@@ -210,18 +208,18 @@ export default function PatientDietPlanScreen({ navigation }: any) {
 
       {/* Notlar */}
       {diet.notes && (
-        <View style={styles.notesBox}>
-          <Text style={styles.notesLabel}>📝 Notlar:</Text>
-          <Text style={styles.notesText}>{diet.notes}</Text>
+        <View style={[styles.notesBox, { backgroundColor: colors.background, borderLeftColor: colors.primary }]}>
+          <Text style={[styles.notesLabel, { color: colors.text }]}>📝 Notlar:</Text>
+          <Text style={[styles.notesText, { color: colors.text }]}>{diet.notes}</Text>
         </View>
       )}
 
-      {/* PDF İndir Butonu */}
+      {/* PDF İndir */}
       <TouchableOpacity
-        style={styles.pdfButton}
+        style={[styles.pdfButton, { backgroundColor: colors.primary }]}
         onPress={() => handleDownloadPDF(diet)}
       >
-        <Ionicons name="document" size={18} color="white" />
+        <Ionicons name="document" size={18} color="#FFF" />
         <Text style={styles.pdfButtonText}>PDF İndir</Text>
       </TouchableOpacity>
     </View>
@@ -229,24 +227,24 @@ export default function PatientDietPlanScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Diyet planları yükleniyor...</Text>
+        <Text style={[styles.loadingText, { color: colors.textLight }]}>Diyet planları yükleniyor...</Text>
       </View>
     );
   }
 
   if (!activeDietPlan && expiredDiets.length === 0) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <Text style={styles.emptyEmoji}>🥗</Text>
-        <Text style={styles.emptyText}>Diyet Planınız Hazırlanıyor</Text>
-        <Text style={styles.emptySubtext}>
+        <Text style={[styles.emptyText, { color: colors.text }]}>Diyet Planınız Hazırlanıyor</Text>
+        <Text style={[styles.emptySubtext, { color: colors.textLight }]}>
           Diyetisyeniniz sizin için kişisel bir diyet planı hazırlayacak. Plan hazır olduğunda burada görünecek.
         </Text>
-        <View style={styles.infoBox}>
+        <View style={[styles.infoBox, { backgroundColor: colors.primary + '15', borderLeftColor: colors.primary }]}>
           <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
-          <Text style={styles.infoBoxText}>
+          <Text style={[styles.infoBoxText, { color: colors.text }]}>
             Yeni sorularınız veya notlarınız için mesaj bölümünü kullanabilirsiniz.
           </Text>
         </View>
@@ -256,25 +254,23 @@ export default function PatientDietPlanScreen({ navigation }: any) {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      {/* Aktif Diyet */}
       {activeDietPlan && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>✅ Aktif Diyet</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>✅ Aktif Diyet</Text>
           </View>
           {renderDietCard(activeDietPlan, false)}
         </View>
       )}
 
-      {/* Eski Diyetler */}
       {expiredDiets.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📦 Eski Diyetler ({expiredDiets.length})</Text>
-            <Text style={styles.sectionSubtitle}>Süresi dolmuş diyet planlarınız</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>📦 Eski Diyetler ({expiredDiets.length})</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textLight }]}>Süresi dolmuş diyet planlarınız</Text>
           </View>
           {expiredDiets.map((diet) => renderDietCard(diet, true))}
         </View>
@@ -288,19 +284,16 @@ export default function PatientDietPlanScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
     padding: 20,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: colors.textLight,
   },
   emptyEmoji: {
     fontSize: 80,
@@ -309,12 +302,10 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: colors.text,
     marginBottom: 10,
   },
   emptySubtext: {
     fontSize: 16,
-    color: colors.textLight,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 24,
@@ -322,18 +313,15 @@ const styles = StyleSheet.create({
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: colors.primary + '15',
     borderRadius: 10,
     padding: 14,
     gap: 10,
     maxWidth: 320,
     borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
   },
   infoBoxText: {
     flex: 1,
     fontSize: 13,
-    color: colors.text,
     lineHeight: 20,
   },
   section: {
@@ -346,19 +334,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.text,
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: colors.textLight,
     marginTop: 4,
   },
   dietCard: {
-    backgroundColor: colors.white,
     borderRadius: 12,
     padding: 18,
     marginBottom: 12,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -367,7 +351,6 @@ const styles = StyleSheet.create({
   expiredDietCard: {
     opacity: 0.8,
     borderWidth: 1,
-    borderColor: '#FFB3B3',
   },
   dietCardHeader: {
     marginBottom: 12,
@@ -381,7 +364,6 @@ const styles = StyleSheet.create({
   dietCardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.text,
     flex: 1,
   },
   statusBadge: {
@@ -392,11 +374,10 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: colors.white,
+    color: '#FFF',
   },
   dietDescription: {
     fontSize: 14,
-    color: colors.textLight,
     marginBottom: 12,
     fontStyle: 'italic',
   },
@@ -405,7 +386,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   infoItem: {
     flexDirection: 'row',
@@ -414,7 +394,6 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 13,
-    color: colors.text,
     fontWeight: '500',
   },
   goalsRow: {
@@ -430,12 +409,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     gap: 2,
   },
-  calorieCard: {
-    backgroundColor: '#FFF3E0',
-  },
-  waterCard: {
-    backgroundColor: '#E3F2FD',
-  },
   goalEmoji: {
     fontSize: 22,
     marginBottom: 2,
@@ -443,11 +416,9 @@ const styles = StyleSheet.create({
   goalValue: {
     fontSize: 17,
     fontWeight: '700',
-    color: colors.text,
   },
   goalLabel: {
     fontSize: 11,
-    color: colors.textLight,
     fontWeight: '500',
   },
   mealsContainer: {
@@ -456,19 +427,16 @@ const styles = StyleSheet.create({
   mealsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
     marginBottom: 10,
   },
   mealItem: {
     marginBottom: 12,
     paddingLeft: 10,
     borderLeftWidth: 2,
-    borderLeftColor: colors.primary,
   },
   mealName: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.text,
     marginBottom: 6,
   },
   foodsList: {
@@ -476,36 +444,29 @@ const styles = StyleSheet.create({
   },
   foodItem: {
     fontSize: 12,
-    color: colors.textLight,
     lineHeight: 18,
   },
   moreFood: {
     fontSize: 11,
-    color: colors.primary,
     fontWeight: '600',
     marginTop: 2,
   },
   notesBox: {
-    backgroundColor: colors.background,
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
     borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
   },
   notesLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
     marginBottom: 4,
   },
   notesText: {
     fontSize: 13,
-    color: colors.text,
     lineHeight: 18,
   },
   pdfButton: {
-    backgroundColor: colors.primary,
     flexDirection: 'row',
     paddingVertical: 12,
     paddingHorizontal: 15,
@@ -515,7 +476,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pdfButtonText: {
-    color: colors.white,
+    color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
   },

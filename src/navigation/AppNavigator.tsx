@@ -58,6 +58,10 @@ import SelectDietitianScreen from '../screens/SelectDietitianScreen';
 import DietitianProfileScreen from '../screens/DietitianProfileScreen';
 import WaterTrackingScreen from '../screens/WaterTrackingScreen';
 
+import { configureGoogleSignIn } from '../services/authService';
+
+configureGoogleSignIn();
+
 const Stack = createStackNavigator();
 
 export default function AppNavigator() {

@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
-import { loginUser } from '../services/authService';
+import { loginUser, signInWithGoogle } from '../services/authService';
 import { colors } from '../constants/colors';
 
 const REMEMBER_EMAIL_KEY = '@diyetle_remember_email';
@@ -123,6 +123,37 @@ export default function LoginScreen({ navigation }: any) {
         } else {
           Alert.alert('Giriş Hatası', error.message);
         }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result.isNewUser) {
+        Alert.alert(
+          'Hesap Bulunamadı',
+          'Bu Google hesabıyla kayıtlı bir hesap yok. Kayıt olmak ister misiniz?',
+          [
+            { text: 'İptal', style: 'cancel' },
+            { text: 'Kayıt Ol', onPress: () => navigation.navigate('Register') },
+          ]
+        );
+        return;
+      }
+      if (result.user?.role === 'dietitian') {
+        navigation.replace('DietitianHome');
+      } else {
+        navigation.replace('PatientHome');
+      }
+    } catch (error: any) {
+      if (error.code === 'auth/pending-approval') {
+        navigation.replace('PendingApproval');
+      } else if (error.code !== 'SIGN_IN_CANCELLED' && error.code !== 'SIGN_IN_REQUIRED') {
+        Alert.alert('Google Giriş Hatası', error.message || 'Giriş yapılamadı.');
       }
     } finally {
       setLoading(false);
@@ -242,6 +273,22 @@ export default function LoginScreen({ navigation }: any) {
           ) : (
             <Text style={styles.loginButtonText}>Giriş Yap</Text>
           )}
+        </TouchableOpacity>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>veya</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        {/* TODO: Development build gerektirir — npx expo run:android/ios sonrası aktif et */}
+        <TouchableOpacity
+          style={[styles.googleButton, styles.buttonDisabled]}
+          onPress={handleGoogleLogin}
+          disabled={true}
+        >
+          <Ionicons name="logo-google" size={20} color="#EA4335" />
+          <Text style={styles.googleButtonText}>Google ile Giriş Yap</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -376,5 +423,36 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: colors.textLight,
     fontSize: 16,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    color: colors.textLight,
+    fontSize: 13,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    padding: 14,
+    borderRadius: 10,
+  },
+  googleButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

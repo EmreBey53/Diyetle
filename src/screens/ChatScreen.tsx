@@ -14,7 +14,8 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../constants/colors';
+import { getColors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import { ChatMessage, sendMessage, subscribeToMessages, markMessagesAsRead } from '../services/chatService';
 import { getCurrentUser } from '../services/authService';
 
@@ -24,6 +25,9 @@ const EMOJI_LIST =['😊', '😂', '❤️', '👍', '👎', '😢', '😮', '�
 
 export default function ChatScreen({ route, navigation }: any) {
   const { chatRoomId, otherUserName, otherUserId } = route.params;
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -41,7 +45,6 @@ export default function ChatScreen({ route, navigation }: any) {
     if (currentUser && chatRoomId) {
       const unsubscribe = subscribeToMessages(chatRoomId, (newMessages) => {
         setMessages(newMessages);
-        // Mesajları okundu olarak işaretle
         markMessagesAsRead(chatRoomId, currentUser.id);
       });
 
@@ -50,7 +53,6 @@ export default function ChatScreen({ route, navigation }: any) {
   }, [chatRoomId, currentUser]);
 
   useEffect(() => {
-    // Emoji picker animasyonu
     Animated.timing(emojiAnimation, {
       toValue: showEmojiPicker ? 1 : 0,
       duration: 200,
@@ -73,7 +75,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
     try {
       setIsTyping(true);
-      
+
       await sendMessage({
         chatRoomId,
         senderId: currentUser.id,
@@ -87,8 +89,7 @@ export default function ChatScreen({ route, navigation }: any) {
         setNewMessage('');
       }
       setShowEmojiPicker(false);
-      
-      // Listeyi en alta kaydır
+
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -109,15 +110,15 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const formatMessageTime = (timestamp: any) => {
     if (!timestamp) return '';
-    
+
     const date = timestamp.toDate();
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-    
+
     if (diffInHours < 24) {
-      return date.toLocaleTimeString('tr-TR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
+      return date.toLocaleTimeString('tr-TR', {
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } else {
       return date.toLocaleDateString('tr-TR', {
@@ -132,45 +133,47 @@ export default function ChatScreen({ route, navigation }: any) {
   const renderMessage = ({ item, index }: { item: ChatMessage; index: number }) => {
     const isMyMessage = item.senderId === currentUser?.id;
     const showAvatar = index === 0 || messages[index - 1]?.senderId !== item.senderId;
-    
+
     return (
       <View style={[
         styles.messageContainer,
         isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer
       ]}>
         {!isMyMessage && showAvatar && (
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>
+          <View style={[styles.avatarContainer, { backgroundColor: colors.primary + '20' }]}>
+            <Text style={[styles.avatarText, { color: colors.primary }]}>
               {otherUserName?.charAt(0)?.toUpperCase() || '?'}
             </Text>
           </View>
         )}
-        
+
         <View style={[
           styles.messageBubble,
-          isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble,
+          isMyMessage
+            ? [styles.myMessageBubble, { backgroundColor: colors.primary }]
+            : [styles.otherMessageBubble, { backgroundColor: colors.cardBackground }],
           !isMyMessage && !showAvatar && styles.messageWithoutAvatar
         ]}>
           <Text style={[
             styles.messageText,
-            isMyMessage ? styles.myMessageText : styles.otherMessageText
+            isMyMessage ? styles.myMessageText : { color: colors.text }
           ]}>
             {item.message}
           </Text>
-          
+
           <View style={styles.messageFooter}>
             <Text style={[
               styles.messageTime,
-              isMyMessage ? styles.myMessageTime : styles.otherMessageTime
+              isMyMessage ? styles.myMessageTime : { color: colors.textLight }
             ]}>
               {formatMessageTime(item.timestamp)}
             </Text>
-            
+
             {isMyMessage && (
-              <Ionicons 
-                name={item.isRead ? "checkmark-done" : "checkmark"} 
-                size={12} 
-                color={item.isRead ? colors.success : colors.textLight}
+              <Ionicons
+                name={item.isRead ? "checkmark-done" : "checkmark"}
+                size={12}
+                color={item.isRead ? colors.success : 'rgba(255,255,255,0.7)'}
                 style={styles.readIcon}
               />
             )}
@@ -184,6 +187,8 @@ export default function ChatScreen({ route, navigation }: any) {
     <Animated.View style={[
       styles.emojiPicker,
       {
+        backgroundColor: colors.cardBackground,
+        borderTopColor: colors.border,
         opacity: emojiAnimation,
         transform: [{
           translateY: emojiAnimation.interpolate({
@@ -200,7 +205,7 @@ export default function ChatScreen({ route, navigation }: any) {
         keyExtractor={(item) => item}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.emojiButton}
+            style={[styles.emojiButton, { backgroundColor: colors.background }]}
             onPress={() => handleEmojiSelect(item)}
           >
             <Text style={styles.emojiText}>{item}</Text>
@@ -211,37 +216,37 @@ export default function ChatScreen({ route, navigation }: any) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()} 
+        <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color={colors.primary} />
           </TouchableOpacity>
-          
+
           <View style={styles.headerInfo}>
-            <View style={styles.headerAvatar}>
-              <Text style={styles.headerAvatarText}>
+            <View style={[styles.headerAvatar, { backgroundColor: colors.primary + '20' }]}>
+              <Text style={[styles.headerAvatarText, { color: colors.primary }]}>
                 {otherUserName?.charAt(0)?.toUpperCase() || '?'}
               </Text>
             </View>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>{otherUserName || 'Kullanıcı'}</Text>
-              <Text style={styles.onlineStatus}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>{otherUserName || 'Kullanıcı'}</Text>
+              <Text style={[styles.onlineStatus, { color: colors.textLight }]}>
                 {onlineStatus ? '🟢 Çevrimiçi' : '⚪ Çevrimdışı'}
               </Text>
             </View>
           </View>
 
           <View style={styles.headerActions}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.headerActionButton}
               onPress={() => {
                 Alert.alert(
@@ -262,15 +267,15 @@ export default function ChatScreen({ route, navigation }: any) {
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id!}
-          style={styles.messagesList}
+          style={[styles.messagesList, { backgroundColor: colors.background }]}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           ListEmptyComponent={() => (
             <View style={styles.emptyContainer}>
               <Ionicons name="chatbubbles-outline" size={64} color={colors.textLight} />
-              <Text style={styles.emptyTitle}>Henüz mesaj yok</Text>
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Henüz mesaj yok</Text>
+              <Text style={[styles.emptyText, { color: colors.textLight }]}>
                 {otherUserName} ile ilk mesajınızı gönderin!
               </Text>
             </View>
@@ -279,8 +284,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
         {/* Typing Indicator */}
         {isTyping && (
-          <View style={styles.typingContainer}>
-            <Text style={styles.typingText}>Mesaj gönderiliyor...</Text>
+          <View style={[styles.typingContainer, { backgroundColor: colors.background }]}>
+            <Text style={[styles.typingText, { color: colors.textLight }]}>Mesaj gönderiliyor...</Text>
           </View>
         )}
 
@@ -288,20 +293,20 @@ export default function ChatScreen({ route, navigation }: any) {
         {showEmojiPicker && renderEmojiPicker()}
 
         {/* Input Container */}
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { backgroundColor: colors.cardBackground, borderTopColor: colors.border }]}>
           <TouchableOpacity
             style={styles.emojiToggleButton}
             onPress={() => setShowEmojiPicker(!showEmojiPicker)}
           >
-            <Ionicons 
-              name={showEmojiPicker ? "close" : "happy"} 
-              size={24} 
-              color={showEmojiPicker ? colors.error : colors.primary} 
+            <Ionicons
+              name={showEmojiPicker ? "close" : "happy"}
+              size={24}
+              color={showEmojiPicker ? colors.error : colors.primary}
             />
           </TouchableOpacity>
 
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
             value={newMessage}
             onChangeText={setNewMessage}
             placeholder="Mesajınızı yazın..."
@@ -313,7 +318,7 @@ export default function ChatScreen({ route, navigation }: any) {
             blurOnSubmit={false}
           />
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.sendButton,
               { backgroundColor: newMessage.trim() ? colors.primary : colors.textLight }
@@ -321,10 +326,10 @@ export default function ChatScreen({ route, navigation }: any) {
             onPress={() => handleSendMessage()}
             disabled={!newMessage.trim() || isTyping}
           >
-            <Ionicons 
-              name="send" 
-              size={18} 
-              color={colors.white}
+            <Ionicons
+              name="send"
+              size={18}
+              color="#FFFFFF"
             />
           </TouchableOpacity>
         </View>
@@ -336,7 +341,6 @@ export default function ChatScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   keyboardContainer: {
     flex: 1,
@@ -347,10 +351,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: Platform.OS === 'ios' ? 8 : 12, // iOS için daha az padding
-    backgroundColor: colors.white,
+    paddingTop: Platform.OS === 'ios' ? 8 : 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -370,7 +372,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -378,7 +379,6 @@ const styles = StyleSheet.create({
   headerAvatarText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.primary,
   },
   headerTextContainer: {
     flex: 1,
@@ -386,11 +386,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
   },
   onlineStatus: {
     fontSize: 12,
-    color: colors.textLight,
     marginTop: 2,
   },
   headerActions: {
@@ -403,7 +401,6 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   messagesContent: {
     padding: 16,
@@ -418,13 +415,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
-    color: colors.textLight,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -443,7 +438,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -452,7 +446,6 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.primary,
   },
   messageBubble: {
     maxWidth: width * 0.75,
@@ -462,11 +455,9 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   myMessageBubble: {
-    backgroundColor: colors.primary,
     borderBottomRightRadius: 6,
   },
   otherMessageBubble: {
-    backgroundColor: colors.white,
     borderBottomLeftRadius: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -482,10 +473,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   myMessageText: {
-    color: colors.white,
-  },
-  otherMessageText: {
-    color: colors.text,
+    color: '#FFFFFF',
   },
   messageFooter: {
     flexDirection: 'row',
@@ -498,10 +486,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   myMessageTime: {
-    color: colors.white + 'CC',
-  },
-  otherMessageTime: {
-    color: colors.textLight,
+    color: 'rgba(255,255,255,0.8)',
   },
   readIcon: {
     marginLeft: 4,
@@ -509,17 +494,13 @@ const styles = StyleSheet.create({
   typingContainer: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: colors.background,
   },
   typingText: {
     fontSize: 12,
-    color: colors.textLight,
     fontStyle: 'italic',
   },
   emojiPicker: {
-    backgroundColor: colors.white,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
     paddingVertical: 12,
   },
   emojiButton: {
@@ -527,7 +508,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginHorizontal: 4,
     borderRadius: 20,
-    backgroundColor: colors.background,
   },
   emojiText: {
     fontSize: 24,
@@ -537,10 +517,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 12 : 16, // iOS için daha az bottom padding
-    backgroundColor: colors.white,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 16,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   emojiToggleButton: {
     padding: 8,
@@ -549,15 +527,12 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginRight: 12,
     maxHeight: 100,
     fontSize: 16,
-    color: colors.text,
-    backgroundColor: colors.background,
   },
   sendButton: {
     width: 44,

@@ -11,6 +11,7 @@ interface EnvConfig {
   FIREBASE_APP_ID: string;
   APP_ENV: string;
   RESEND_API_KEY: string;
+  GOOGLE_WEB_CLIENT_ID: string;
 }
 
 const getEnvVar = (key: string, fallback?: string): string => {
@@ -38,5 +39,6 @@ export const ENV: EnvConfig = {
   FIREBASE_APP_ID: getEnvVar('FIREBASE_APP_ID', '1:727199954922:web:fca8a5a13c6eade9126493'),
   APP_ENV: getEnvVar('APP_ENV', 'development'),
   RESEND_API_KEY: getEnvVar('RESEND_API_KEY', 're_6tJ1LfaE_Nx97KRFADp2kpQgrtdhPAnbN'),
+  GOOGLE_WEB_CLIENT_ID: getEnvVar('GOOGLE_WEB_CLIENT_ID', '727199954922-7sd56hbr9obnnmn32qej0vlpc5ht9p41.apps.googleusercontent.com'),
 };
 

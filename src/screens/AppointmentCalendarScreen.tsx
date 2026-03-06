@@ -11,11 +11,12 @@ import {
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../constants/colors';
+import { getColors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import { getCurrentUser } from '../services/authService';
-import { 
-  getAvailableSlots, 
-  bookAppointment, 
+import {
+  getAvailableSlots,
+  bookAppointment,
   getAppointmentHistory,
   createAvailabilitySlots,
   confirmAppointment,
@@ -23,6 +24,9 @@ import {
 } from '../services/appointmentCalendarService';
 
 export default function AppointmentCalendarScreen({ navigation }: any) {
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
+
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [availableSlots, setAvailableSlots] = useState<any[]>([]);
@@ -56,7 +60,7 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
     try {
       const user = await getCurrentUser();
       setCurrentUser(user);
-      
+
       if (user?.id) {
         const history = await getAppointmentHistory(user.id, user.role === 'admin' ? 'patient' : user.role);
         setAppointments(history);
@@ -72,17 +76,13 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
       }
 
       if (currentUser.role === 'patient') {
-        // Danışan için: Diyetisyenin müsait slotlarını göster
-        // Bu örnekte tüm diyetisyenlerin slotları gösteriliyor
-        // Gerçekte danışanın diyetisyeninin slotları gösterilecek
         const slots = await getAvailableSlots(
-          'diyetisyen_id', // Gerçekte currentUser.dietitianId
+          'diyetisyen_id',
           new Date(selectedDate),
           new Date(selectedDate)
         );
         setAvailableSlots(slots);
       } else {
-        // Diyetisyen için: Kendi slotlarını göster
         const slots = await getAvailableSlots(
           currentUser.id,
           new Date(selectedDate),
@@ -101,11 +101,9 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
 
   const handleSlotPress = (slot: any) => {
     if (currentUser?.role === 'patient') {
-      // Danışan için: Randevu rezervasyonu
       setSelectedSlot(slot);
       setShowBookingModal(true);
     } else {
-      // Diyetisyen için: Slot detayları veya düzenleme
       Alert.alert(
         'Slot Detayları',
         `${slot.startTime} - ${slot.endTime}\nTip: ${slot.appointmentType}\nFiyat: ${slot.price || 'Ücretsiz'}`,
@@ -156,7 +154,7 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
       }];
 
       await createAvailabilitySlots(currentUser.id, slots);
-      
+
       Alert.alert('Başarılı', 'Müsaitlik slotu oluşturuldu!');
       setShowCreateSlotModal(false);
       setNewSlotForm({
@@ -217,8 +215,7 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
 
   const getMarkedDates = () => {
     const marked: any = {};
-    
-    // Randevuları işaretle
+
     appointments.forEach(appointment => {
       const date = appointment.appointmentDate.toDate().toISOString().split('T')[0];
       marked[date] = {
@@ -227,7 +224,6 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
       };
     });
 
-    // Seçili tarihi işaretle
     if (selectedDate) {
       marked[selectedDate] = {
         ...marked[selectedDate],
@@ -239,95 +235,13 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
     return marked;
   };
 
-  const renderSlot = (slot: any) => (
-    <TouchableOpacity
-      key={slot.id}
-      style={styles.slotCard}
-      onPress={() => handleSlotPress(slot)}
-    >
-      <View style={styles.slotHeader}>
-        <Text style={styles.slotTime}>
-          {slot.startTime} - {slot.endTime}
-        </Text>
-        <Text style={styles.slotType}>{slot.appointmentType}</Text>
-      </View>
-      
-      {slot.price && (
-        <Text style={styles.slotPrice}>₺{slot.price}</Text>
-      )}
-      
-      {slot.notes && (
-        <Text style={styles.slotNotes}>{slot.notes}</Text>
-      )}
-    </TouchableOpacity>
-  );
-
-  const renderAppointment = (appointment: any) => (
-    <View key={appointment.id} style={styles.appointmentCard}>
-      <View style={styles.appointmentHeader}>
-        <Text style={styles.appointmentDate}>
-          {appointment.appointmentDate.toDate().toLocaleDateString('tr-TR')}
-        </Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(appointment.status)}</Text>
-        </View>
-      </View>
-      
-      <Text style={styles.appointmentTime}>
-        {appointment.appointmentDate.toDate().toLocaleTimeString('tr-TR', { 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        })}
-      </Text>
-      
-      <Text style={styles.appointmentWith}>
-        {currentUser?.role === 'patient' ? appointment.dietitianName : appointment.patientName}
-      </Text>
-      
-      {appointment.agenda && (
-        <Text style={styles.appointmentAgenda}>{appointment.agenda}</Text>
-      )}
-      
-      <View style={styles.appointmentActions}>
-        {appointment.status === 'scheduled' && currentUser?.role === 'dietitian' && (
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={() => handleConfirmAppointment(appointment.id)}
-          >
-            <Text style={styles.confirmButtonText}>Onayla</Text>
-          </TouchableOpacity>
-        )}
-        
-        {appointment.videoCallId && appointment.status === 'confirmed' && (
-          <TouchableOpacity
-            style={styles.joinButton}
-            onPress={() => navigation.navigate('VideoCall', { 
-              callId: appointment.videoCallId,
-              roomId: appointment.meetingLink?.split('/').pop()
-            })}
-          >
-            <Ionicons name="videocam" size={16} color={colors.white} />
-            <Text style={styles.joinButtonText}>Katıl</Text>
-          </TouchableOpacity>
-        )}
-        
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => handleCancelAppointment(appointment.id)}
-        >
-          <Text style={styles.cancelButtonText}>İptal</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed': return colors.primary;
       case 'scheduled': return colors.warning;
       case 'completed': return colors.success;
       case 'cancelled': return colors.error;
-      default: return colors.gray;
+      default: return colors.textLight;
     }
   };
 
@@ -341,13 +255,95 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
     }
   };
 
+  const renderSlot = (slot: any) => (
+    <TouchableOpacity
+      key={slot.id}
+      style={[styles.slotCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+      onPress={() => handleSlotPress(slot)}
+    >
+      <View style={styles.slotHeader}>
+        <Text style={[styles.slotTime, { color: colors.text }]}>
+          {slot.startTime} - {slot.endTime}
+        </Text>
+        <Text style={[styles.slotType, { color: colors.primary }]}>{slot.appointmentType}</Text>
+      </View>
+
+      {slot.price && (
+        <Text style={[styles.slotPrice, { color: colors.success }]}>₺{slot.price}</Text>
+      )}
+
+      {slot.notes && (
+        <Text style={[styles.slotNotes, { color: colors.textLight }]}>{slot.notes}</Text>
+      )}
+    </TouchableOpacity>
+  );
+
+  const renderAppointment = (appointment: any) => (
+    <View key={appointment.id} style={[styles.appointmentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <View style={styles.appointmentHeader}>
+        <Text style={[styles.appointmentDate, { color: colors.text }]}>
+          {appointment.appointmentDate.toDate().toLocaleDateString('tr-TR')}
+        </Text>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) }]}>
+          <Text style={styles.statusText}>{getStatusText(appointment.status)}</Text>
+        </View>
+      </View>
+
+      <Text style={[styles.appointmentTime, { color: colors.textLight }]}>
+        {appointment.appointmentDate.toDate().toLocaleTimeString('tr-TR', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })}
+      </Text>
+
+      <Text style={[styles.appointmentWith, { color: colors.text }]}>
+        {currentUser?.role === 'patient' ? appointment.dietitianName : appointment.patientName}
+      </Text>
+
+      {appointment.agenda && (
+        <Text style={[styles.appointmentAgenda, { color: colors.textLight }]}>{appointment.agenda}</Text>
+      )}
+
+      <View style={styles.appointmentActions}>
+        {appointment.status === 'scheduled' && currentUser?.role === 'dietitian' && (
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: colors.primary }]}
+            onPress={() => handleConfirmAppointment(appointment.id)}
+          >
+            <Text style={styles.actionButtonText}>Onayla</Text>
+          </TouchableOpacity>
+        )}
+
+        {appointment.videoCallId && appointment.status === 'confirmed' && (
+          <TouchableOpacity
+            style={[styles.joinButton, { backgroundColor: colors.success }]}
+            onPress={() => navigation.navigate('VideoCall', {
+              callId: appointment.videoCallId,
+              roomId: appointment.meetingLink?.split('/').pop()
+            })}
+          >
+            <Ionicons name="videocam" size={16} color="#FFF" />
+            <Text style={styles.actionButtonText}>Katıl</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: colors.error }]}
+          onPress={() => handleCancelAppointment(appointment.id)}
+        >
+          <Text style={styles.actionButtonText}>İptal</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Randevu Takvimi</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Randevu Takvimi</Text>
         {currentUser?.role === 'dietitian' && (
           <TouchableOpacity onPress={() => setShowCreateSlotModal(true)}>
             <Ionicons name="add" size={24} color={colors.primary} />
@@ -359,68 +355,79 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
         onDayPress={handleDateSelect}
         markedDates={getMarkedDates()}
         theme={{
+          backgroundColor: colors.background,
+          calendarBackground: colors.cardBackground,
+          textSectionTitleColor: colors.textLight,
           selectedDayBackgroundColor: colors.primary,
+          selectedDayTextColor: '#FFF',
           todayTextColor: colors.primary,
+          dayTextColor: colors.text,
+          textDisabledColor: colors.textLight,
+          dotColor: colors.primary,
+          selectedDotColor: '#FFF',
           arrowColor: colors.primary,
-        }}
+          monthTextColor: colors.text,
+        } as any}
         minDate={new Date().toISOString().split('T')[0]}
       />
 
       {selectedDate && (
         <View style={styles.slotsSection}>
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
             {new Date(selectedDate).toLocaleDateString('tr-TR')} - Müsait Saatler
           </Text>
-          
+
           {availableSlots.length > 0 ? (
             availableSlots.map(renderSlot)
           ) : (
-            <Text style={styles.noSlotsText}>Bu tarihte müsait slot bulunmuyor</Text>
+            <Text style={[styles.noSlotsText, { color: colors.textLight }]}>Bu tarihte müsait slot bulunmuyor</Text>
           )}
         </View>
       )}
 
       <View style={styles.appointmentsSection}>
-        <Text style={styles.sectionTitle}>Randevularım</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Randevularım</Text>
         {appointments.length > 0 ? (
           appointments.map(renderAppointment)
         ) : (
-          <Text style={styles.noAppointmentsText}>Henüz randevunuz bulunmuyor</Text>
+          <Text style={[styles.noAppointmentsText, { color: colors.textLight }]}>Henüz randevunuz bulunmuyor</Text>
         )}
       </View>
 
       {/* Booking Modal */}
       <Modal visible={showBookingModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Randevu Rezervasyonu</Text>
-            
+          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Randevu Rezervasyonu</Text>
+
             <TextInput
-              style={styles.input}
+              style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
               placeholder="Görüşme konusu (opsiyonel)"
+              placeholderTextColor={colors.textLight}
               value={bookingForm.agenda}
               onChangeText={(text) => setBookingForm({...bookingForm, agenda: text})}
               multiline
             />
-            
+
             <TextInput
-              style={styles.input}
+              style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
               placeholder="Hazırlık notları (opsiyonel)"
+              placeholderTextColor={colors.textLight}
               value={bookingForm.preparationNotes}
               onChangeText={(text) => setBookingForm({...bookingForm, preparationNotes: text})}
               multiline
             />
-            
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={styles.modalCancelButton}
+                style={[styles.modalCancelButton, { borderColor: colors.border }]}
                 onPress={() => setShowBookingModal(false)}
               >
-                <Text style={styles.modalCancelText}>İptal</Text>
+                <Text style={[styles.modalCancelText, { color: colors.textLight }]}>İptal</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
-                style={styles.modalConfirmButton}
+                style={[styles.modalConfirmButton, { backgroundColor: colors.primary }]}
                 onPress={handleBookAppointment}
               >
                 <Text style={styles.modalConfirmText}>Rezerve Et</Text>
@@ -433,51 +440,55 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
       {/* Create Slot Modal */}
       <Modal visible={showCreateSlotModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Yeni Müsaitlik Slotu</Text>
-            
+          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Yeni Müsaitlik Slotu</Text>
+
             <View style={styles.timeRow}>
               <TextInput
-                style={[styles.input, styles.timeInput]}
+                style={[styles.input, styles.timeInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
                 placeholder="09:00"
+                placeholderTextColor={colors.textLight}
                 value={newSlotForm.startTime}
                 onChangeText={(text) => setNewSlotForm({...newSlotForm, startTime: text})}
               />
-              <Text style={styles.timeSeparator}>-</Text>
+              <Text style={[styles.timeSeparator, { color: colors.textLight }]}>-</Text>
               <TextInput
-                style={[styles.input, styles.timeInput]}
+                style={[styles.input, styles.timeInput, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
                 placeholder="09:30"
+                placeholderTextColor={colors.textLight}
                 value={newSlotForm.endTime}
                 onChangeText={(text) => setNewSlotForm({...newSlotForm, endTime: text})}
               />
             </View>
-            
+
             <TextInput
-              style={styles.input}
+              style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
               placeholder="Fiyat (opsiyonel)"
+              placeholderTextColor={colors.textLight}
               value={newSlotForm.price}
               onChangeText={(text) => setNewSlotForm({...newSlotForm, price: text})}
               keyboardType="numeric"
             />
-            
+
             <TextInput
-              style={styles.input}
+              style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
               placeholder="Notlar (opsiyonel)"
+              placeholderTextColor={colors.textLight}
               value={newSlotForm.notes}
               onChangeText={(text) => setNewSlotForm({...newSlotForm, notes: text})}
               multiline
             />
-            
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={styles.modalCancelButton}
+                style={[styles.modalCancelButton, { borderColor: colors.border }]}
                 onPress={() => setShowCreateSlotModal(false)}
               >
-                <Text style={styles.modalCancelText}>İptal</Text>
+                <Text style={[styles.modalCancelText, { color: colors.textLight }]}>İptal</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
-                style={styles.modalConfirmButton}
+                style={[styles.modalConfirmButton, { backgroundColor: colors.primary }]}
                 onPress={handleCreateSlot}
               >
                 <Text style={styles.modalConfirmText}>Oluştur</Text>
@@ -493,7 +504,6 @@ export default function AppointmentCalendarScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
   },
   header: {
     flexDirection: 'row',
@@ -501,12 +511,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.darkGray,
   },
   slotsSection: {
     padding: 16,
@@ -517,11 +525,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.darkGray,
     marginBottom: 12,
   },
   slotCard: {
-    backgroundColor: colors.lightGray,
+    borderWidth: 1,
     padding: 16,
     borderRadius: 12,
     marginBottom: 8,
@@ -535,27 +542,21 @@ const styles = StyleSheet.create({
   slotTime: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.darkGray,
   },
   slotType: {
     fontSize: 14,
-    color: colors.primary,
     textTransform: 'capitalize',
   },
   slotPrice: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.success,
     marginBottom: 4,
   },
   slotNotes: {
     fontSize: 12,
-    color: colors.gray,
   },
   appointmentCard: {
-    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.lightGray,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -569,7 +570,6 @@ const styles = StyleSheet.create({
   appointmentDate: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.darkGray,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -578,22 +578,19 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    color: colors.white,
+    color: '#FFF',
     fontWeight: '500',
   },
   appointmentTime: {
     fontSize: 14,
-    color: colors.gray,
     marginBottom: 4,
   },
   appointmentWith: {
     fontSize: 14,
-    color: colors.darkGray,
     marginBottom: 8,
   },
   appointmentAgenda: {
     fontSize: 14,
-    color: colors.gray,
     fontStyle: 'italic',
     marginBottom: 12,
   },
@@ -602,19 +599,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
   },
-  confirmButton: {
-    backgroundColor: colors.primary,
+  actionButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
   },
-  confirmButtonText: {
-    color: colors.white,
+  actionButtonText: {
+    color: '#FFF',
     fontSize: 12,
     fontWeight: '500',
   },
   joinButton: {
-    backgroundColor: colors.success,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -622,31 +617,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  joinButtonText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  cancelButton: {
-    backgroundColor: colors.error,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  cancelButtonText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '500',
-  },
   noSlotsText: {
     textAlign: 'center',
-    color: colors.gray,
     fontSize: 14,
     marginTop: 20,
   },
   noAppointmentsText: {
     textAlign: 'center',
-    color: colors.gray,
     fontSize: 14,
     marginTop: 20,
   },
@@ -657,7 +634,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: colors.white,
     borderRadius: 16,
     padding: 24,
     width: '90%',
@@ -666,13 +642,11 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.darkGray,
     textAlign: 'center',
     marginBottom: 20,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.lightGray,
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
@@ -690,7 +664,6 @@ const styles = StyleSheet.create({
   timeSeparator: {
     marginHorizontal: 12,
     fontSize: 16,
-    color: colors.gray,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -703,10 +676,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.lightGray,
   },
   modalCancelText: {
-    color: colors.gray,
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
@@ -716,10 +687,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginLeft: 8,
     borderRadius: 8,
-    backgroundColor: colors.primary,
   },
   modalConfirmText: {
-    color: colors.white,
+    color: '#FFF',
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',

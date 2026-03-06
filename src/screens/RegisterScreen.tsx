@@ -12,7 +12,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { registerUser } from '../services/authService';
+import { registerUser, signInWithGoogle } from '../services/authService';
+import { setDoc, doc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { sendPushNotification } from '../services/notificationService';
 import { colors } from '../constants/colors';
 import { UserRole } from '../models/User';
 import { sendWelcomeEmailPatient, sendWelcomeEmailDietitian } from '../services/emailService';
@@ -25,6 +29,7 @@ export default function RegisterScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<UserRole>('patient');
   const [loading, setLoading] = useState(false);
+  const [googleUid, setGoogleUid] = useState<string | null>(null);
 
   // Diyetisyen profil alanları
   const [specialization, setSpecialization] = useState('');
@@ -34,24 +39,102 @@ export default function RegisterScreen({ navigation }: any) {
   const [sessionFee, setSessionFee] = useState('');
   const [education, setEducation] = useState('');
 
+  const handleGooglePrefill = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      if (!result.isNewUser) {
+        // Zaten kayıtlı — giriş yap
+        if (result.user?.role === 'dietitian') {
+          navigation.replace('DietitianHome');
+        } else {
+          navigation.replace('PatientHome');
+        }
+        return;
+      }
+      // Yeni kullanıcı — formu prefill et
+      setGoogleUid(result.uid);
+      setDisplayName(result.displayName || '');
+      setEmail(result.email || '');
+      Alert.alert(
+        'Google Hesabı Bağlandı',
+        'Bilgileriniz dolduruldu. Hesap türünüzü seçin ve "Kaydı Tamamla" butonuna basın.',
+        [{ text: 'Tamam' }]
+      );
+    } catch (error: any) {
+      if (error.code !== 'SIGN_IN_CANCELLED' && error.code !== 'SIGN_IN_REQUIRED') {
+        Alert.alert('Google Hatası', error.message || 'Giriş yapılamadı.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRegister = useCallback(async () => {
-    if (!displayName || !email || !password || !confirmPassword) {
+    if (!displayName || !email) {
       Alert.alert('Hata', 'Lütfen tüm alanları doldurun!');
       return;
     }
 
-    if (password !== confirmPassword) {
-      Alert.alert('Hata', 'Şifreler eşleşmiyor!');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Hata', 'Şifre en az 6 karakter olmalı!');
-      return;
+    // Normal kayıt — şifre kontrolü (Google ile kayıtta şifre alanları boş olabilir)
+    if (!googleUid) {
+      if (!password || !confirmPassword) {
+        Alert.alert('Hata', 'Lütfen tüm alanları doldurun!');
+        return;
+      }
+      if (password !== confirmPassword) {
+        Alert.alert('Hata', 'Şifreler eşleşmiyor!');
+        return;
+      }
+      if (password.length < 6) {
+        Alert.alert('Hata', 'Şifre en az 6 karakter olmalı!');
+        return;
+      }
     }
 
     setLoading(true);
     try {
+      if (googleUid) {
+        // Google ile kayıt — Firebase Auth zaten oluşturuldu, Firestore'a yaz
+        const userData: any = {
+          id: googleUid,
+          email,
+          displayName,
+          role,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...(role === 'dietitian' && {
+            isApproved: false,
+            specialization: specialization || undefined,
+            bio: bio || undefined,
+            city: city || undefined,
+            experience: experience ? Number(experience) : undefined,
+            sessionFee: sessionFee ? Number(sessionFee) : undefined,
+            education: education || undefined,
+            phone: phone || undefined,
+          }),
+        };
+        await setDoc(doc(db, 'users', googleUid), userData);
+
+        if (role === 'dietitian') {
+          // Admin'e bildirim
+          try {
+            const adminSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+            const adminTokens = adminSnap.docs.map((d) => d.data().pushToken).filter(Boolean);
+            await Promise.all(adminTokens.map((token: string) =>
+              sendPushNotification(token, '🆕 Yeni Diyetisyen Başvurusu', `${displayName} platforma başvurdu.`)
+            ));
+          } catch {}
+          sendWelcomeEmailDietitian(email, displayName).catch(() => {});
+          navigation.replace('PendingApproval');
+        } else {
+          sendWelcomeEmailPatient(email, displayName, undefined).catch(() => {});
+          navigation.replace('KVKKConsent', { user: userData, selectedDietitianId: undefined });
+        }
+        return;
+      }
+
+      // Normal email/şifre kaydı
       const user = await registerUser(
         email,
         password,
@@ -94,7 +177,7 @@ export default function RegisterScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  }, [displayName, email, password, confirmPassword, role, specialization, bio, city, experience, sessionFee, education, phone, navigation]);
+  }, [displayName, email, password, confirmPassword, role, specialization, bio, city, experience, sessionFee, education, phone, googleUid, navigation]);
 
   return (
     <KeyboardAvoidingView
@@ -105,6 +188,22 @@ export default function RegisterScreen({ navigation }: any) {
         <Text style={styles.logo}>🥗</Text>
         <Text style={styles.title}>Kayıt Ol</Text>
         <Text style={styles.subtitle}>Yeni hesap oluşturun</Text>
+
+        {/* TODO: Development build gerektirir — npx expo run:android/ios sonrası aktif et */}
+        <TouchableOpacity
+          style={[styles.googleButton, styles.buttonDisabled]}
+          onPress={handleGooglePrefill}
+          disabled={true}
+        >
+          <Ionicons name="logo-google" size={20} color="#EA4335" />
+          <Text style={styles.googleButtonText}>Google ile Devam Et</Text>
+        </TouchableOpacity>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>veya e-posta ile</Text>
+          <View style={styles.dividerLine} />
+        </View>
 
         <TextInput
           style={styles.input}
@@ -134,25 +233,29 @@ export default function RegisterScreen({ navigation }: any) {
           keyboardType="phone-pad"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Şifre (min. 6 karakter)"
-          placeholderTextColor={colors.textLight}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+        {!googleUid && (
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder="Şifre (min. 6 karakter)"
+              placeholderTextColor={colors.textLight}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+            />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Şifre Tekrar"
-          placeholderTextColor={colors.textLight}
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+            <TextInput
+              style={styles.input}
+              placeholder="Şifre Tekrar"
+              placeholderTextColor={colors.textLight}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </>
+        )}
 
         <Text style={styles.label}>Hesap Türü</Text>
         <View style={styles.roleContainer}>
@@ -266,7 +369,7 @@ export default function RegisterScreen({ navigation }: any) {
           {loading ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={styles.registerButtonText}>Kayıt Ol</Text>
+            <Text style={styles.registerButtonText}>{googleUid ? 'Kaydı Tamamla' : 'Kayıt Ol'}</Text>
           )}
         </TouchableOpacity>
 
@@ -444,5 +547,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.warning,
     lineHeight: 19,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    color: colors.textLight,
+    fontSize: 13,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  googleButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

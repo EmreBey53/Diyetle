@@ -6,13 +6,28 @@ import {
   signOut,
   updateProfile,
   sendEmailVerification,
+  GoogleAuthProvider,
+  signInWithCredential,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+// GoogleSignin lazy import — Expo Go'da native modül yok, development build gerektirir
+let _GoogleSignin: any = null;
+const getGoogleSignin = () => {
+  if (!_GoogleSignin) {
+    try {
+      _GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
+    } catch {
+      throw new Error('Google Sign-In native modülü bulunamadı. Development build gerektirir.');
+    }
+  }
+  return _GoogleSignin;
+};
 import { User, UserRole } from '../models/User';
 import { calculateBMI } from '../models/Patient';
 import { logAuditEvent, AUDIT_ACTIONS } from './auditService';
 import { EncryptionService } from './encryptionService';
+import { ENV } from '../config/env';
 
 export const registerUser = async (
   email: string,
@@ -269,4 +284,80 @@ export const signInAnonymouslyIfNeeded = async (): Promise<void> => {
   } catch {
     // Sessizce geç — anonim auth Firebase konsolunda etkin olmayabilir
   }
+};
+
+export const configureGoogleSignIn = (): void => {
+  try {
+    getGoogleSignin().configure({
+      webClientId: ENV.GOOGLE_WEB_CLIENT_ID,
+    });
+  } catch {
+    // Expo Go'da sessizce geç
+  }
+};
+
+export interface GoogleSignInResult {
+  isNewUser: boolean;
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  user?: User; // Mevcut kullanıcılar için dolu gelir
+}
+
+export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
+  const GoogleSignin = getGoogleSignin();
+  await GoogleSignin.hasPlayServices();
+  const response = await GoogleSignin.signIn();
+  const idToken = (response as any).data?.idToken ?? (response as any).idToken;
+  if (!idToken) throw new Error('Google kimlik doğrulaması başarısız oldu.');
+
+  const credential = GoogleAuthProvider.credential(idToken);
+  const userCredential = await signInWithCredential(auth, credential);
+  const firebaseUser = userCredential.user;
+
+  const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+
+  if (!userDoc.exists()) {
+    // Yeni kullanıcı — Firestore'a henüz yazma, kayıt akışı devam edecek
+    return {
+      isNewUser: true,
+      uid: firebaseUser.uid,
+      email: firebaseUser.email ?? '',
+      displayName: firebaseUser.displayName ?? '',
+      photoURL: firebaseUser.photoURL ?? undefined,
+    };
+  }
+
+  // Mevcut kullanıcı
+  const userData = userDoc.data() as User;
+
+  if (userData.role === 'dietitian' && userData.isApproved === false) {
+    await signOut(auth);
+    throw Object.assign(new Error('PENDING_APPROVAL'), { code: 'auth/pending-approval' });
+  }
+
+  await logAuditEvent({
+    userId: firebaseUser.uid,
+    userRole: userData.role,
+    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+    resource: 'auth',
+    resourceId: firebaseUser.uid,
+    details: { email: firebaseUser.email, loginMethod: 'google', loginTime: new Date() },
+    severity: 'low',
+  });
+
+  await EncryptionService.secureStore('user_session', JSON.stringify({
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    role: userData.role,
+  }));
+
+  return {
+    isNewUser: false,
+    uid: firebaseUser.uid,
+    email: firebaseUser.email ?? '',
+    displayName: userData.displayName,
+    user: userData,
+  };
 };
